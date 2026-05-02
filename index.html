@@ -145,7 +145,34 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <!-- RESUMEN -->
 <div id="tab-resumen" class="tab-content active">
   <div class="sec">KPIs — 20 Apr 2026 vs 13 Apr 2026</div>
+  <!-- Resumen Líder filter -->
+  <div style="display:flex;gap:10px;align-items:center;margin:10px 0 6px">
+    <label style="font-size:12px;font-weight:700;color:#374151">Filtrar Líder:</label>
+    <select id="resumenLiderSel" onchange="renderResumenLiderTable()"
+      style="padding:5px 10px;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;background:#fff;min-width:160px">
+      <option value="">Todos los líderes</option>
+    </select>
+  </div>
   <div class="kpi-grid" id="kpiGrid"></div>
+  <!-- Tabla acumulada por líder -->
+  <div class="sec" style="margin-top:18px">📊 Ventas & Órdenes por Líder — LW vs PW</div>
+  <div style="overflow-x:auto;margin-bottom:18px">
+    <table id="resumenLiderTable" style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead>
+        <tr style="background:#F3F4F6;text-align:left">
+          <th style="padding:8px 10px;font-weight:700;color:#374151">Líder</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Ventas LW</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Δ vs PW</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Órdenes LW</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Δ vs PW</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">AOV</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Rev Ads LW</th>
+          <th style="padding:8px 10px;font-weight:700;color:#374151;text-align:right">Δ vs PW</th>
+        </tr>
+      </thead>
+      <tbody id="resumenLiderTbody"></tbody>
+    </table>
+  </div>
   <div class="sec">Cancelaciones y Defectos por Líder</div>
   <div class="charts-grid">
     <div class="chart-card"><h3>% Cancelaciones por Líder — semanal</h3><canvas id="cCancel"></canvas></div>
@@ -173,11 +200,23 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <!-- MARCA DETALLE -->
 <div id="tab-marca_detalle" class="tab-content">
   <div class="brand-detail">
-    <div class="brand-selector">
-      <label>Marca</label>
-      <select id="brandSelect" onchange="renderBrandDetail()">
-        <option value="">— Elige una marca —</option>
-      </select>
+    <div class="brand-selector" style="flex-wrap:wrap;gap:8px;align-items:flex-start">
+      <label style="margin-top:8px">Marcas</label>
+      <div style="flex:1">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+          <input id="brandSearch" type="text" placeholder="🔍 Escribe para buscar..." oninput="filterBrandSelect()"
+            style="padding:6px 10px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;min-width:200px;outline:none"/>
+          <select id="brandSelect"
+            style="padding:6px 10px;border:1.5px solid #D1D5DB;border-radius:6px;font-size:13px;min-width:220px;max-width:320px">
+            <option value="">— Elige una marca —</option>
+          </select>
+          <button onclick="addBrandToSelection()"
+            style="padding:6px 14px;background:#3B82F6;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer">+ Agregar</button>
+          <button onclick="clearBrandSelection()"
+            style="padding:6px 12px;background:#F3F4F6;color:#6B7280;border:1px solid #D1D5DB;border-radius:6px;font-size:12px;cursor:pointer">✕ Limpiar</button>
+        </div>
+        <div id="selectedBrandTags" style="display:flex;flex-wrap:wrap;gap:5px;min-height:10px"></div>
+      </div>
     </div>
     <div id="brandMeta" class="brand-meta" style="display:none"></div>
     <div id="brandChartsWrap" class="brand-charts-grid"></div>
@@ -673,8 +712,78 @@ function lmBrandChips(fieldName, n, liderF, kamF, fmt){
   return chips ? `<div class="lm-brands">${chips}</div>` : '';
 }
 
+
+function renderResumenLiderTable(){
+  const liderF=document.getElementById('resumenLiderSel')?.value||'';
+  const liders=liderF?[liderF]:DATA.leaders;
+  let totV=0,totPV=0,totO=0,totPO=0,totR=0,totPR=0;
+  const rows=liders.map(l=>{
+    const lw=DATA.lider_data[l]?.lw||{},pw=DATA.lider_data[l]?.pw||{};
+    const dV=pw.ventas?((lw.ventas-pw.ventas)/pw.ventas*100):0;
+    const dO=pw.ordenes?((lw.ordenes-pw.ordenes)/pw.ordenes*100):0;
+    const dR=pw.revenue_ads?((lw.revenue_ads-pw.revenue_ads)/pw.revenue_ads*100):0;
+    const dCol=v=>`style="color:${v>=0?'#059669':'#DC2626'};font-weight:700"`;
+    totV+=lw.ventas||0; totPV+=pw.ventas||0;
+    totO+=lw.ordenes||0; totPO+=pw.ordenes||0;
+    totR+=lw.revenue_ads||0; totPR+=pw.revenue_ads||0;
+    return`<tr style="border-bottom:1px solid #E5E7EB">
+      <td style="padding:8px 10px;font-weight:600">${LS[l]||l.split('@')[0]}</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(lw.ventas)}</td>
+      <td style="padding:8px 10px;text-align:right;${dV>=0?'color:#059669':'color:#DC2626'};font-weight:700">${dV>=0?'▲':'▼'} ${Math.abs(dV).toFixed(1)}%</td>
+      <td style="padding:8px 10px;text-align:right">${fmtN(lw.ordenes)}</td>
+      <td style="padding:8px 10px;text-align:right;${dO>=0?'color:#059669':'color:#DC2626'};font-weight:700">${dO>=0?'▲':'▼'} ${Math.abs(dO).toFixed(1)}%</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(lw.aov)}</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(lw.revenue_ads)}</td>
+      <td style="padding:8px 10px;text-align:right;${dR>=0?'color:#059669':'color:#DC2626'};font-weight:700">${dR>=0?'▲':'▼'} ${Math.abs(dR).toFixed(1)}%</td>
+    </tr>`;
+  });
+  // Totals row (only when showing all)
+  if(!liderF&&liders.length>1){
+    const dTV=totPV?((totV-totPV)/totPV*100):0;
+    const dTO=totPO?((totO-totPO)/totPO*100):0;
+    const dTR=totPR?((totR-totPR)/totPR*100):0;
+    rows.push(`<tr style="background:#F9FAFB;font-weight:800;border-top:2px solid #D1D5DB">
+      <td style="padding:8px 10px">TOTAL</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(totV)}</td>
+      <td style="padding:8px 10px;text-align:right;${dTV>=0?'color:#059669':'color:#DC2626'}">${dTV>=0?'▲':'▼'} ${Math.abs(dTV).toFixed(1)}%</td>
+      <td style="padding:8px 10px;text-align:right">${fmtN(totO)}</td>
+      <td style="padding:8px 10px;text-align:right;${dTO>=0?'color:#059669':'color:#DC2626'}">${dTO>=0?'▲':'▼'} ${Math.abs(dTO).toFixed(1)}%</td>
+      <td style="padding:8px 10px;text-align:right">—</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(totR)}</td>
+      <td style="padding:8px 10px;text-align:right;${dTR>=0?'color:#059669':'color:#DC2626'}">${dTR>=0?'▲':'▼'} ${Math.abs(dTR).toFixed(1)}%</td>
+    </tr>`);
+  }
+  document.getElementById('resumenLiderTbody').innerHTML=rows.join('');
+
+  // Also refresh KPI cards filtered by líder
+  const lw2=liderF?(DATA.lider_data[liderF]?.lw||DATA.lw_totals):DATA.lw_totals;
+  const pw2=liderF?(DATA.lider_data[liderF]?.pw||DATA.pw_totals):DATA.pw_totals;
+  const kpis2=[
+    ['Ventas LW','green',fmtM(lw2.ventas),deltaHtml(lw2.ventas,pw2.ventas,false,fmtM),'ventas',fmtM],
+    ['Órdenes LW','blue',fmtN(lw2.ordenes),deltaHtml(lw2.ordenes,pw2.ordenes,false,fmtN),'ordenes',fmtN],
+    ['AOV','blue',fmtM(lw2.aov),deltaHtml(lw2.aov,pw2.aov,false,fmtM),'aov',fmtM],
+    ['Tráfico (SS)','purple',fmtN(lw2.trafico),deltaHtml(lw2.trafico,pw2.trafico,false,fmtN),'trafico_ss',fmtN],
+    ['% Conversión','purple',fmtP(lw2.cvr),deltaHtml(lw2.cvr,pw2.cvr,false,fmtP),'cvr_pct',fmtP],
+    ['% MKD Ally','orange',fmtP(lw2.mkd_ally),deltaHtml(lw2.mkd_ally,pw2.mkd_ally,false,fmtP),'pct_markdown_ally',fmtP],
+    ['% MKD Pro Ally','orange',fmtP(lw2.mkd_pro),deltaHtml(lw2.mkd_pro,pw2.mkd_pro,false,fmtP),'pct_markdown_pro_ally',fmtP],
+    ['Bookings Ads','green',fmtN(lw2.bookings_ads),deltaHtml(lw2.bookings_ads,pw2.bookings_ads,false,fmtN),'bookings_ads',fmtN],
+    ['Revenue Ads','green',fmtM(lw2.revenue_ads),deltaHtml(lw2.revenue_ads,pw2.revenue_ads,false,fmtM),'revenue_ads',fmtM],
+    ['% Cancelaciones','red',fmtP(lw2.pct_cancel),deltaHtml(lw2.pct_cancel,pw2.pct_cancel,true,fmtP),'pct_cancelaciones',fmtP],
+    ['% Defectos','red',fmtP(lw2.pct_defecto),deltaHtml(lw2.pct_defecto,pw2.pct_defecto,true,fmtP),'pct_defectos',fmtP],
+  ];
+  document.getElementById('kpiGrid').innerHTML=kpis2.map(([l,c,v,d,field,fn])=>
+    `<div class="kpi ${c}"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div>${d}${brandChips(field,3,liderF,'',fn)}</div>`).join('');
+}
+
 // ── RESUMEN ────────────────────────────────────────────────────────
 function initResumen(){
+  // Populate Líder filter (once)
+  const rLiderSel=document.getElementById('resumenLiderSel');
+  if(rLiderSel&&rLiderSel.options.length<=1){
+    DATA.leaders.forEach(l=>{
+      const o=document.createElement('option');o.value=l;o.textContent=LS[l]||l.split('@')[0];rLiderSel.appendChild(o);
+    });
+  }
   const lw=DATA.lw_totals,pw=DATA.pw_totals;
   const kpis=[
     ['Ventas LW','green',fmtM(lw.ventas),deltaHtml(lw.ventas,pw.ventas,false,fmtM),'ventas',fmtM],
@@ -702,6 +811,8 @@ function initResumen(){
   mkChart('cMkdPro','line',WL,lDs('mkd_pro',{borderDash:[4,2]}),{ticks:{callback:v=>v+'%'}});
   mkChart('cVentas','line',WL,[{label:'Ventas',data:DATA.weekly_global.ventas,borderColor:'#FF441F',backgroundColor:'rgba(255,68,31,.1)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]);
   mkChart('cOrdenes','line',WL,[{label:'Órdenes',data:DATA.weekly_global.ordenes,borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,.1)',fill:true,borderWidth:2,pointRadius:0,tension:.3}]);
+
+  renderResumenLiderTable();
 }
 
 // ── BRAND DETAIL ───────────────────────────────────────────────────
@@ -710,11 +821,63 @@ function initBrandDetail(){
   if(sel.options.length>1) return;
   DATA.brand_list.forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b;sel.appendChild(o);});
 }
+const _BRAND_COLORS=['#FF441F','#3B82F6','#10B981','#8B5CF6','#F59E0B','#EC4899','#06B6D4','#22C55E','#6366F1','#F97316','#14B8A6','#A855F7'];
+let _selectedBrands=[];
+
+function filterBrandSelect(){
+  const q=(document.getElementById('brandSearch').value||'').toLowerCase().trim();
+  const sel=document.getElementById('brandSelect');
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Elige una marca —</option>';
+  const filtered=DATA.brand_list.filter(b=>!q||b.toLowerCase().includes(q));
+  filtered.forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b;if(b===cur)o.selected=true;sel.appendChild(o);});
+}
+function addBrandToSelection(){
+  const brand=document.getElementById('brandSelect').value;
+  if(!brand||_selectedBrands.includes(brand)) return;
+  _selectedBrands.push(brand);
+  document.getElementById('brandSearch').value='';
+  filterBrandSelect();
+  document.getElementById('brandSelect').value='';
+  _renderBrandTags();
+  renderBrandDetail();
+}
+function removeBrandFromSelection(brand){
+  _selectedBrands=_selectedBrands.filter(b=>b!==brand);
+  _renderBrandTags();
+  if(_selectedBrands.length) renderBrandDetail();
+  else{
+    document.getElementById('brandMeta').style.display='none';
+    document.getElementById('brandChartsWrap').innerHTML='';
+  }
+}
+function clearBrandSelection(){
+  _selectedBrands=[];
+  _renderBrandTags();
+  document.getElementById('brandMeta').style.display='none';
+  document.getElementById('brandChartsWrap').innerHTML='';
+  document.getElementById('brandSearch').value='';
+  filterBrandSelect();
+}
+function _renderBrandTags(){
+  document.getElementById('selectedBrandTags').innerHTML=_selectedBrands.map((b,i)=>{
+    const c=_BRAND_COLORS[i%_BRAND_COLORS.length];
+    const safe=b.replace(/'/g,"\\'");
+    return`<span style="background:${c}18;border:1.5px solid ${c};color:${c};border-radius:999px;padding:3px 10px 3px 8px;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:5px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${c};flex-shrink:0"></span>${b}
+      <span onclick="removeBrandFromSelection('${safe}')" style="cursor:pointer;font-size:15px;line-height:1;margin-left:2px;opacity:.7">×</span>
+    </span>`;
+  }).join('');
+}
 function renderBrandDetail(){
-  const brand=document.getElementById('brandSelect').value; if(!brand)return;
-  const meta=DATA.brand_meta[brand]||{},bd=DATA.brand_data[brand]; if(!bd)return;
-  const mDiv=document.getElementById('brandMeta'); mDiv.style.display='flex';
-  mDiv.innerHTML=`<div class="brand-meta-item"><strong>Marca:</strong> ${brand}</div><div class="brand-meta-item"><strong>Líder:</strong> ${LS[meta.lider]||meta.lider}</div><div class="brand-meta-item"><strong>KAM:</strong> ${meta.kam}</div>`;
+  if(!_selectedBrands.length) return;
+  const mDiv=document.getElementById('brandMeta');
+  mDiv.style.display='flex'; mDiv.style.flexWrap='wrap';
+  mDiv.innerHTML=_selectedBrands.map((b,i)=>{
+    const meta=DATA.brand_meta[b]||{};
+    const c=_BRAND_COLORS[i%_BRAND_COLORS.length];
+    return`<div class="brand-meta-item" style="border-left:3px solid ${c};padding-left:6px"><strong style="color:${c}">${b}</strong> · ${LS[meta.lider]||''} · ${meta.kam||''}</div>`;
+  }).join('');
   const metrics=[
     ['ventas','Ventas','#FF441F'],['ordenes','Órdenes','#3B82F6'],['aov','AOV','#06B6D4'],
     ['trafico_ss','Tráfico (SS)','#8B5CF6'],['cvr_pct','% Conversión','#10B981'],
@@ -722,13 +885,39 @@ function renderBrandDetail(){
     ['bookings_ads','Bookings Ads','#6366F1'],['revenue_ads','Revenue Ads','#22C55E'],
     ['pct_cancelaciones','% Cancelaciones','#EF4444'],['pct_defectos','% Defectos','#F97316']
   ];
+  // Avg metrics (rates/percentages) — use weighted avg; sum metrics — use sum
+  const avgMetrics=new Set(['aov','cvr_pct','pct_markdown_ally','pct_markdown_pro_ally','pct_cancelaciones','pct_defectos']);
+  const n=DATA.all_weeks.length;
   const wrap=document.getElementById('brandChartsWrap');
-  wrap.innerHTML=metrics.map(([k,l,c])=>`<div class="brand-chart-card"><h4>${l}</h4><canvas id="bc_${k}"></canvas></div>`).join('');
-  metrics.forEach(([k,l,c])=>mkChart('bc_'+k,'line',WL,[{label:l,data:bd[k]||[],borderColor:c,backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3}]));
+  wrap.innerHTML=metrics.map(([k,l])=>`<div class="brand-chart-card"><h4>${l}</h4><canvas id="bc_${k}"></canvas></div>`).join('');
+  metrics.forEach(([k,l,c])=>{
+    const isAvg=avgMetrics.has(k);
+    // Build combined series: sum (or avg) across all selected brands per week
+    const len=Math.max(..._selectedBrands.map(b=>(DATA.brand_data[b]||{})[k]?.length||0));
+    const combined=Array.from({length:len},(_,wi)=>{
+      const vals=_selectedBrands.map(b=>{
+        const arr=(DATA.brand_data[b]||{})[k]||[];
+        return arr[wi]??null;
+      }).filter(v=>v!==null&&v!==undefined);
+      if(!vals.length) return null;
+      if(isAvg) return vals.reduce((a,v)=>a+v,0)/vals.length;
+      return vals.reduce((a,v)=>a+v,0);
+    });
+    const label=_selectedBrands.length===1?_selectedBrands[0]:`${_selectedBrands.length} marcas combinadas`;
+    mkChart('bc_'+k,'line',WL,[{
+      label, data:combined, borderColor:c,
+      backgroundColor:c+'22', fill:_selectedBrands.length>1,
+      borderWidth:2, pointRadius:0, tension:.3
+    }]);
+  });
 }
 function goBrand(brand){
   showTab('marca_detalle',document.querySelectorAll('.tab')[1]);
-  setTimeout(()=>{const s=document.getElementById('brandSelect');if(s.options.length<=1)initBrandDetail();s.value=brand;renderBrandDetail();},50);
+  setTimeout(()=>{
+    if(document.getElementById('brandSelect').options.length<=1) initBrandDetail();
+    if(!_selectedBrands.includes(brand)){_selectedBrands.push(brand); _renderBrandTags();}
+    renderBrandDetail();
+  },50);
 }
 
 // ── LIDERES ────────────────────────────────────────────────────────
@@ -902,29 +1091,48 @@ function initAlertas(){
   renderAlertas();
 }
 function renderAlertas(){
-  const lider=document.getElementById('filtLider').value,kam=document.getElementById('filtKam').value;
-  const brands=DATA.alert_brands.filter(a=>(!lider||a.lider===lider)&&(!kam||a.kam===kam));
-  document.getElementById('alertsGrid').innerHTML=brands.map(a=>{
+  const liderF=document.getElementById('filtLider').value,kamF=document.getElementById('filtKam').value;
+  const n=DATA.all_weeks.length;
+  const bmap={};
+  (DATA.callout_brands||[]).forEach(b=>{bmap[b.marca]={lider:b.lider,kam:b.kam};});
+  const brandAlerts=[];
+  for(const [brand,bd] of Object.entries(DATA.brand_data||{})){
+    const m=bmap[brand]||{};
+    if(liderF&&m.lider!==liderF) continue;
+    if(kamF&&m.kam!==kamF) continue;
+    const last=bd.pct_cancelaciones?.length?Math.min(n-1,bd.pct_cancelaciones.length-1):0;
+    const cancel=(bd.pct_cancelaciones||[])[last]||0;
+    const defecto=(bd.pct_defectos||[])[last]||0;
+    const ventas=(bd.ventas||[])[last]||0;
+    const trafico=(bd.trafico_ss||[])[last]||0;
+    const cvr=(bd.cvr_pct||[])[last]||0;
+    const mkd=(bd.pct_markdown_ally||[])[last]||0;
+    if(cancel<4&&defecto<3&&!(trafico>0&&cvr<3&&cvr>0)) continue;
+    const level=(cancel>=6||defecto>=4)?'crit':'warn';
+    brandAlerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas,trafico,cvr,mkd,level});
+  }
+  brandAlerts.sort((a,b)=>a.level!==b.level?(a.level==='crit'?-1:1):(b.cancel+b.defecto)-(a.cancel+a.defecto));
+  document.getElementById('alertsGrid').innerHTML=brandAlerts.map(a=>{
     const hasTraf=a.trafico>0;
-    const trafLine=hasTraf?`<div class="as" style="margin-top:3px">🚦 Tráfico: ${fmtN(a.trafico)} · CVR: ${fmtP(a.cvr)}${(a.mkd||0)>0?' · MKD: '+fmtP(a.mkd):''}</div>`:'';
+    const trafLine=hasTraf?`<div class="as" style="margin-top:3px">🚦 Tráfico: ${fmtN(a.trafico)} · CVR: ${fmtP(a.cvr)}${a.mkd>0?' · MKD: '+fmtP(a.mkd):''}</div>`:'';
     const accion=a.cancel>=6
       ?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar horarios y disponibilidad de producto</div>`
       :a.defecto>=4
       ?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar calidad de pedidos (faltantes/errores)</div>`
       :(hasTraf&&a.cvr<3&&a.cvr>0)
-      ?`<div style="font-size:10px;color:#92400E;background:#FFFBEB;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ CVR bajo — revisar fotos, precio y menú. Evaluar MKD Ally</div>`
-      :'';
+      ?`<div style="font-size:10px;color:#92400E;background:#FFFBEB;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ CVR bajo — revisar fotos, precio y menú. Evaluar MKD Ally</div>`:'';
     return`<div class="alert-card ${a.level}">
       <div class="alert-icon">${a.level==='crit'?'🔴':'🟠'}</div>
-      <div style="flex:1"><div class="al">${a.level==='crit'?'CRÍTICO':'ATENCIÓN'} · ${LS[a.lider]||a.lider}</div>
-      <div class="am" onclick="goBrand('${a.marca.replace(/'/g,"\'")}')">${a.marca}</div>
-      <div class="as">KAM: ${a.kam}</div>
-      <div class="as">❌ Cancel: <strong>${fmtP(a.cancel)}</strong> · 🔧 Defecto: <strong>${fmtP(a.defecto)}</strong></div>
-      ${trafLine}${accion}</div>
+      <div style="flex:1">
+        <div class="al">${a.level==='crit'?'CRÍTICO':'ATENCIÓN'} · ${LS[a.lider]||a.lider.split('@')[0]}</div>
+        <div class="am" onclick="goBrand('${a.marca.replace(/'/g,"\\'")}')">${a.marca}</div>
+        <div class="as">KAM: ${a.kam}</div>
+        <div class="as">❌ Cancel: <strong>${fmtP(a.cancel)}</strong> · 🔧 Defecto: <strong>${fmtP(a.defecto)}</strong> · 💰 ${fmtM(a.ventas)}</div>
+        ${trafLine}${accion}
+      </div>
     </div>`;
-  }).join('')||'<p style="color:#9CA3AF;padding:20px">Sin alertas para este filtro.</p>';
+  }).join('')||'<p style="color:#9CA3AF;padding:20px">✅ Sin alertas de brand para este filtro.</p>';
 }
-
 // ── PAGINACIÓN ─────────────────────────────────────────────────────
 function renderPag(id,pages,cur,cb){
   const el=document.getElementById(id);if(!el||pages<=1){if(el)el.innerHTML='';return;}
@@ -1447,7 +1655,7 @@ function _populateCaidasKams(){
   const kams=[...new Set(
     DATA.kam_rows.filter(r=>!liderF||r.lider===liderF).map(r=>r.kam)
   )].sort();
-  kamSel.innerHTML='';
+  kamSel.innerHTML='<option value="">Todos los KAMs</option>';
   kams.forEach(k=>{
     const o=document.createElement('option');
     o.value=k; o.textContent=k;
@@ -1499,10 +1707,13 @@ async function syncCaidas(){
 
 function renderCaidasTable(){
   const kam=document.getElementById('caidasKamSel').value;
+  const liderF=document.getElementById('caidasLiderSel')?.value||'';
   const wrap=document.getElementById('caidasTableWrap');
   const week=DATA.last_week_str||'';
 
-  const brands=(DATA.callout_brands||[]).filter(b=>b.kam===kam);
+  const brands=(DATA.callout_brands||[]).filter(b=>
+    (!kam||b.kam===kam)&&(!liderF||b.lider===liderF)
+  );
   const n=DATA.all_weeks.length;
   const totalKamGmv=brands.reduce((s,b)=>s+(b.gmv_lw||0),0);
 
@@ -1529,7 +1740,7 @@ function renderCaidasTable(){
   }
 
   const maxLoss=declining[0].nomLoss;
-  const kamFbData=fbR('caidas',week,kam);
+  const kamFbData=kam?fbR('caidas',week,kam):{};
 
   const rows=declining.map((b,i)=>{
     const saved=kamFbData[fbK(b.marca)]||{};
@@ -1683,7 +1894,7 @@ function adsPopulateKams(){
   const lider=document.getElementById('adsLiderSel').value;
   const sel=document.getElementById('adsKamSel');
   const prev=sel.value;
-  sel.innerHTML='';
+  sel.innerHTML='<option value="">Todos los KAMs</option>';
   const kams=[...new Set(DATA.kam_rows.filter(r=>!lider||r.lider===lider).map(r=>r.kam))].sort();
   kams.forEach(k=>{
     const o=document.createElement('option'); o.value=k; o.textContent=k;

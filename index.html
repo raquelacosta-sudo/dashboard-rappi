@@ -131,14 +131,14 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <main>
 <div class="tabs">
   <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen</button>
-  <button class="tab" onclick="showTab('marca_detalle',this)">🔍 Detalle Marca</button>
+  <button class="tab" onclick="showTab('marca_detalle',this)">📉 TendenciasXMarca</button>
   <button class="tab" onclick="showTab('lideres',this)">👥 Líder y KAM</button>
   <button class="tab" onclick="showTab('tendencia',this)">📈 Tendencias KAM</button>
-  <button class="tab" onclick="showTab('marcas',this)">🏪 Marcas</button>
-  <button class="tab" onclick="showTab('alertas',this)">⚠️ Alertas</button>
-  <button class="tab" onclick="showTab('callouts',this)">📋 Callouts Marca</button>
+  <button class="tab" onclick="showTab('marcas',this)">📋 WoW Status</button>
+  <button class="tab" onclick="showTab('alertas',this)">🚨 Alertas Semana</button>
+  <button class="tab" onclick="showTab('callouts',this)">📊 YoY Status</button>
   <button class="tab" onclick="showTab('momentos',this)">🕐 Momentos</button>
-  <button class="tab" onclick="showTab('caidas',this)">📉 Caídas KAM</button>
+  <button class="tab" onclick="showTab('caidas',this)">🔍 Zooms Semanales</button>
   <button class="tab" onclick="showTab('ads',this)">📡 Ads & Forecast</button>
 </div>
 
@@ -432,9 +432,13 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 </div>
 
 <div id="tab-caidas" class="tab-content">
-  <h2 style="margin-bottom:16px;font-size:18px;font-weight:700;color:#1F2937">📉 Top 10 Caídas por KAM — Semana en Curso</h2>
+  <h2 style="margin-bottom:16px;font-size:18px;font-weight:700;color:#1F2937">🔍 Zooms Semanales — Semana en Curso</h2>
   <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap">
-    <label style="font-size:13px;font-weight:600;color:#374151">Seleccionar KAM:</label>
+    <label style="font-size:13px;font-weight:600;color:#374151">Líder:</label>
+    <select id="caidasLiderSel" onchange="onCaidasLiderChange()" style="padding:6px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;background:#fff;min-width:180px">
+      <option value="">Todos los líderes</option>
+    </select>
+    <label style="font-size:13px;font-weight:600;color:#374151">KAM:</label>
     <select id="caidasKamSel" onchange="renderCaidasTable()" style="padding:6px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;background:#fff;min-width:200px"></select>
     <span id="caidasWeekLabel" style="font-size:12px;color:#6B7280;background:#F3F4F6;padding:4px 10px;border-radius:999px"></span>
     <button onclick="syncCaidas()" style="margin-left:auto;background:#10B981;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;font-weight:600;cursor:pointer">↻ Sincronizar</button>
@@ -1435,6 +1439,29 @@ function fbSyncIndicator(id,msg,color){
   }
 }
 
+
+function _populateCaidasKams(){
+  const liderF=document.getElementById('caidasLiderSel')?.value||'';
+  const kamSel=document.getElementById('caidasKamSel');
+  const cur=kamSel.value;
+  const kams=[...new Set(
+    DATA.kam_rows.filter(r=>!liderF||r.lider===liderF).map(r=>r.kam)
+  )].sort();
+  kamSel.innerHTML='';
+  kams.forEach(k=>{
+    const o=document.createElement('option');
+    o.value=k; o.textContent=k;
+    if(k===cur) o.selected=true;
+    kamSel.appendChild(o);
+  });
+  // If previous selection no longer valid, pick first
+  if(!kams.includes(kamSel.value) && kams.length) kamSel.value=kams[0];
+}
+function onCaidasLiderChange(){
+  _populateCaidasKams();
+  renderCaidasTable();
+}
+
 // ── CAÍDAS KAM ────────────────────────────────────────────────────────────────
 async function initCaidas(){
   const sel=document.getElementById('caidasKamSel');
@@ -1446,12 +1473,18 @@ async function initCaidas(){
   await fbLoad();
   fbSyncIndicator('caidasSyncStatus','☁ Sincronizado','#059669');
 
-  const kams=[...new Set(DATA.kam_rows.map(r=>r.kam))].sort();
-  if(sel.getAttribute('data-loaded')!=='1'){
-    sel.innerHTML='';
-    kams.forEach(k=>{ const o=document.createElement('option');o.value=k;o.textContent=k;sel.appendChild(o); });
-    sel.setAttribute('data-loaded','1');
+  // Populate Líder dropdown (once)
+  const liderSel=document.getElementById('caidasLiderSel');
+  if(liderSel.getAttribute('data-loaded')!=='1'){
+    const lideres=[...new Set(DATA.kam_rows.map(r=>r.lider))].sort();
+    lideres.forEach(l=>{
+      const o=document.createElement('option');
+      o.value=l; o.textContent=LS[l]||l.split('@')[0]; liderSel.appendChild(o);
+    });
+    liderSel.setAttribute('data-loaded','1');
   }
+  // Populate KAM dropdown filtered by current Líder
+  _populateCaidasKams();
   renderCaidasTable();
 }
 

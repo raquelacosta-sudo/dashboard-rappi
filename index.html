@@ -146,6 +146,7 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
   <button id="wow-tab-btn" class="tab" onclick="showTab('marcas',this)">📋 WoW Status</button>
   <button class="tab" onclick="showTab('alertas',this)">🚨 Alertas Semana</button>
   <button class="tab" onclick="showTab('alertas_mes',this)">📅 Alertas Mes</button>
+  <button class="tab" onclick="showTab('kam_reports',this)">📝 Reportes KAM</button>
   <button class="tab" onclick="showTab('callouts',this)">📊 YoY Status</button>
   <button class="tab" onclick="showTab('caidas',this)">🔍 Zooms Semanales</button>
   <button class="tab" onclick="showTab('ads',this)">📡 Ads & Forecast</button>
@@ -323,6 +324,42 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     </select>
   </div>
   <div class="alerts-grid" id="alertsMesGrid"></div>
+</div>
+
+<style>
+/* ── KAM REPORTS ── */
+.kr-card{background:#fff;border-radius:14px;padding:18px 20px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:16px;border-left:4px solid #EF4444}
+.kr-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px}
+.kr-kam-name{font-size:15px;font-weight:800;color:#1F2937}
+.kr-lider-tag{font-size:11px;background:#F3F4F6;color:#6B7280;border-radius:20px;padding:3px 10px;font-weight:600}
+.kr-desvios{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.kr-chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.kr-chip.neg{background:#FEE2E2;color:#DC2626}
+.kr-chip.ops{background:#FEF3C7;color:#D97706}
+.kr-insight{background:#EFF6FF;border-radius:8px;padding:8px 12px;font-size:12px;color:#1E40AF;margin-bottom:12px;font-weight:500}
+.kr-forms{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.kr-forms{grid-template-columns:1fr}}
+.kr-textarea{width:100%;padding:8px;font-size:12px;border:1.5px solid #D1D5DB;border-radius:8px;resize:vertical;min-height:64px;box-sizing:border-box;font-family:inherit}
+.kr-textarea:focus{outline:none;border-color:#3B82F6}
+.kr-label{font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;display:block}
+.kr-save-row{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:10px}
+.kr-btn{background:#3B82F6;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer}
+.kr-btn:hover{background:#2563EB}
+.kr-ts{font-size:10px;color:#059669}
+</style>
+<div id="tab-kam_reports" class="tab-content">
+  <div class="sec">📝 Reportes KAM — Variaciones Semana en Curso</div>
+  <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:8px 16px;margin-bottom:12px;font-size:12px;color:#991B1B">
+    Solo se muestran KAMs con variaciones negativas relevantes esta semana. Llena la explicación y plan de acción.
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:11px 16px;margin-bottom:16px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select id="krFiltLider" onchange="renderKamReportes()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:7px 11px;font-size:13px">
+      <option value="">Todos los líderes</option>
+    </select>
+    <span id="krWeekBadge" style="font-size:12px;color:#6B7280;background:#F3F4F6;padding:4px 12px;border-radius:999px;font-weight:600"></span>
+    <span id="krCount" style="font-size:12px;color:#6B7280;margin-left:auto"></span>
+  </div>
+  <div id="krGrid"></div>
 </div>
 
 <style>
@@ -681,6 +718,7 @@ function showTab(id,btn){
   if(id==='caidas') initCaidas();
   if(id==='ads') initAds();
   if(id==='alertas_mes') initAlertasMes();
+  if(id==='kam_reports') initKamReportes();
   if(id==='zoom_mes') initZoomMes();
 }
 
@@ -1153,7 +1191,7 @@ function renderKamTable(){
       <td>${fmtP(lw.mkd_pro)}</td><td>${varHtml(lw.mkd_pro,pw.mkd_pro)}</td>
       <td><span class="pill ${(lw.pct_cancel||0)>=6?'crit':(lw.pct_cancel||0)>=4?'warn':'ok'}">${fmtP(lw.pct_cancel)}</span></td><td>${varHtml(lw.pct_cancel,pw.pct_cancel,true)}</td>
       <td><span class="pill ${(lw.pct_defecto||0)>=4?'crit':(lw.pct_defecto||0)>=2.5?'warn':'ok'}">${fmtP(lw.pct_defecto)}</span></td><td>${varHtml(lw.pct_defecto,pw.pct_defecto,true)}</td>
-      <td>${lw.marcas||0}</td>
+      <td>${(DATA.callout_brands||[]).filter(b=>b.kam===r.kam&&b.lider===r.lider).length}</td>
     </tr>`;
   }).join('');
   renderPag('kamPag',pages,kamPage,p=>{kamPage=p;renderKamTable();});
@@ -1571,6 +1609,135 @@ function renderZoomMes(){
 }
 
 
+
+// ── KAM REPORTS ─────────────────────────────────────────────────
+function initKamReportes(){
+  const sel=document.getElementById('krFiltLider');
+  if(sel&&sel.options.length<=1) DATA.leaders.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=LS[l]||l.split('@')[0];sel.appendChild(o);});
+  const week=DATA.last_week_str||'';
+  const badge=document.getElementById('krWeekBadge');
+  if(badge) badge.textContent='Semana '+week;
+  renderKamReportes();
+}
+function _krInsight(d){
+  const msgs=[];
+  if(d.ventas<-15&&d.ordenes<-15) msgs.push('Caída en ventas y órdenes — posible pérdida de tráfico o conversión en marcas clave.');
+  else if(d.ventas<-10) msgs.push('Ventas a la baja — revisar GMV de marcas principales y acciones de pricing.');
+  if(d.trafico<-10) msgs.push('Tráfico en descenso — verificar visibilidad y posicionamiento en app.');
+  if(d.cvr<-1.5) msgs.push('CVR cayendo — revisar fotos, menú, precios y posibles ajustes de MKD Ally.');
+  if(d.bookings<-20) msgs.push('Bookings Ads abajo — evaluar inversión publicitaria y ROI de campañas.');
+  if(d.revenue<-20) msgs.push('Revenue Ads bajo — revisar estrategia de campaña y marcas con ads activos.');
+  if(d.cancel>1) msgs.push('Cancelaciones subiendo — verificar horarios, disponibilidad y operación de tiendas.');
+  if(d.defecto>0.8) msgs.push('Defectos en aumento — revisar calidad de pedidos y faltantes.');
+  if(d.mkd_ally<-3) msgs.push('MKD Ally reduciéndose — el descuento ya no está activo en varias marcas.');
+  return msgs.length?msgs.join(' '):null;
+}
+function renderKamReportes(){
+  const liderF=document.getElementById('krFiltLider')?.value||'';
+  const week=DATA.last_week_str||'';
+  const grid=document.getElementById('krGrid');
+  const n=DATA.all_weeks.length;
+  // Build KAM cards
+  const cards=[];
+  for(const r of (DATA.kam_rows||[])){
+    if(liderF&&r.lider!==liderF) continue;
+    const lw=r.lw||{},pw=r.pw||{};
+    // Compute deltas
+    const pct=(l,p)=>p>0?(l-p)/p*100:0;
+    const pp=(l,p)=>l-p;
+    const d={
+      ventas:   pct(lw.ventas,pw.ventas),
+      ordenes:  pct(lw.ordenes,pw.ordenes),
+      trafico:  pct(lw.trafico,pw.trafico),
+      cvr:      pp(lw.cvr,pw.cvr),
+      bookings: pct(lw.bookings_ads,pw.bookings_ads),
+      revenue:  pct(lw.revenue_ads,pw.revenue_ads),
+      mkd_ally: pp(lw.mkd_ally,pw.mkd_ally),
+      mkd_pro:  pp(lw.mkd_pro,pw.mkd_pro),
+      cancel:   pp(lw.pct_cancel,pw.pct_cancel),
+      defecto:  pp(lw.pct_defecto,pw.pct_defecto)
+    };
+    // Collect desvíos relevantes
+    const chips=[];
+    if(d.ventas<-5)    chips.push({label:`Ventas ${d.ventas.toFixed(1)}%`,type:'neg'});
+    if(d.ordenes<-5)   chips.push({label:`Órdenes ${d.ordenes.toFixed(1)}%`,type:'neg'});
+    if(d.trafico<-8)   chips.push({label:`Tráfico ${d.trafico.toFixed(1)}%`,type:'neg'});
+    if(d.cvr<-1)       chips.push({label:`CVR ${d.cvr.toFixed(2)}pp`,type:'neg'});
+    if(d.bookings<-10) chips.push({label:`Bookings ${d.bookings.toFixed(1)}%`,type:'neg'});
+    if(d.revenue<-10)  chips.push({label:`Revenue Ads ${d.revenue.toFixed(1)}%`,type:'neg'});
+    if(d.mkd_ally<-2)  chips.push({label:`MKD Ally ${d.mkd_ally.toFixed(1)}pp`,type:'neg'});
+    if(d.mkd_pro<-2)   chips.push({label:`MKD Pro ${d.mkd_pro.toFixed(1)}pp`,type:'neg'});
+    if(d.cancel>0.8)   chips.push({label:`Cancel +${d.cancel.toFixed(2)}pp`,type:'ops'});
+    if(d.defecto>0.5)  chips.push({label:`Defecto +${d.defecto.toFixed(2)}pp`,type:'ops'});
+    if(!chips.length) continue;
+    const insight=_krInsight(d);
+    const saved=fbR('kam_reports',week,r.kam)||{};
+    // Find brand driving most of the GMV drop for this KAM
+    const kamBrands=(DATA.callout_brands||[]).filter(b=>b.kam===r.kam&&b.lider===r.lider);
+    const topBrand=kamBrands.filter(b=>b.delta_lw<0).sort((a,b)=>{
+      const lossA=(b.gmv_pw-b.gmv_lw)||0,lossB=(b.gmv_pw-b.gmv_lw)||0;
+      return (b.gmv_pw-b.gmv_lw)-(a.gmv_pw-a.gmv_lw);
+    })[0]||null;
+    cards.push({r,chips,insight,saved,d,topBrand});
+  }
+  document.getElementById('krCount').textContent=cards.length+' KAMs con desvíos';
+  if(!cards.length){grid.innerHTML='<p style="color:#9CA3AF;padding:20px;text-align:center">✅ Sin desvíos relevantes esta semana para el filtro seleccionado.</p>';return;}
+  grid.innerHTML=cards.map((c,i)=>{
+    const {r,chips,insight,saved,topBrand}=c;
+    const kamEsc=r.kam.replace(/'/g,"\\'");
+    const liderEsc=r.lider.replace(/'/g,"\\'");
+    return`<div class="kr-card" id="krcard_${i}">
+      <div class="kr-header">
+        <div>
+          <div class="kr-kam-name">👤 ${r.kam}</div>
+          <div style="font-size:11px;color:#6B7280;margin-top:2px">${r.lider} · ${(DATA.callout_brands||[]).filter(b=>b.kam===r.kam&&b.lider===r.lider).length} marcas</div>
+        </div>
+        <span class="kr-lider-tag">${LS[r.lider]||r.lider.split('@')[0]}</span>
+      </div>
+      <div class="kr-desvios">${chips.map(ch=>`<span class="kr-chip ${ch.type}">${ch.label}</span>`).join('')}</div>
+      ${topBrand?`<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:7px 12px;margin-bottom:10px;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px">🏷️</span>
+        <span style="font-weight:700;color:#C2410C">Marca con mayor impacto:</span>
+        <span style="font-weight:800;color:#1F2937;cursor:pointer" onclick="goBrand('${topBrand.marca.replace(/'/g,"\'")}')">${topBrand.marca}</span>
+        <span style="color:#DC2626;font-weight:700">${topBrand.delta_lw!==null?(topBrand.delta_lw>=0?'▲':'▼')+Math.abs(topBrand.delta_lw).toFixed(1)+'% GMV':''}</span>
+        <span style="color:#6B7280;font-size:11px">${topBrand.gmv_lw!==undefined?'LW: '+fmtM(topBrand.gmv_lw):''}</span>
+      </div>`:''}
+      ${insight?`<div class="kr-insight">💡 ${insight}</div>`:''}
+      <div class="kr-forms">
+        <div>
+          <label class="kr-label">📝 Explicación del comercial</label>
+          <textarea id="kr_expl_${i}" class="kr-textarea" placeholder="¿Qué pasó esta semana con tus marcas? ¿Hubo cambios en campañas, disponibilidad, competencia...?">${saved.expl||''}</textarea>
+        </div>
+        <div>
+          <label class="kr-label">📋 Plan de acción</label>
+          <textarea id="kr_plan_${i}" class="kr-textarea" placeholder="¿Qué vas a hacer para revertir la caída? ¿Cuándo? ¿Con qué marcas?">${saved.plan||''}</textarea>
+        </div>
+      </div>
+      <div class="kr-save-row">
+        ${saved.ts?`<span class="kr-ts">✓ Guardado ${saved.ts}</span>`:''}
+        <button id="krsavebtn_${i}" class="kr-btn" onclick="saveKamReport('${kamEsc}','${liderEsc}','${week}',${i})">💾 Guardar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function saveKamReport(kam,lider,week,idx){
+  const expl=document.getElementById('kr_expl_'+idx)?.value||'';
+  const plan=document.getElementById('kr_plan_'+idx)?.value||'';
+  const ts=new Date().toLocaleDateString('es-MX');
+  const btn=document.getElementById('krsavebtn_'+idx);
+  if(btn){btn.textContent='Guardando...';btn.disabled=true;}
+  try{
+    await fbW('kam_reports',[week,kam],{expl,plan,ts,lider});
+    if(btn){btn.textContent='✅ Guardado';btn.style.background='#059669';}
+    setTimeout(()=>{if(btn){btn.textContent='💾 Guardar';btn.style.background='';btn.disabled=false;}},2500);
+    // update ts display
+    const card=document.getElementById('krcard_'+idx);
+    if(card){const tsel=card.querySelector('.kr-ts');if(tsel)tsel.textContent='✓ Guardado '+ts;}
+  }catch(e){
+    if(btn){btn.textContent='❌ Error';btn.style.background='#EF4444';}
+    setTimeout(()=>{if(btn){btn.textContent='💾 Guardar';btn.style.background='';btn.disabled=false;}},2500);
+  }
+}
 // ── INIT ───────────────────────────────────────────────────────────
 populateKamFilter();
 initResumen();
@@ -2034,12 +2201,14 @@ function fbK(s){ return String(s).replace(/[.#$[\]\/ ]/g,'_'); }
 
 async function fbLoad(){
   try{
-    const [r1,r2] = await Promise.all([
+    const [r1,r2,r3] = await Promise.all([
       fetch(FB+'/ads_forecast.json').then(r=>r.json()),
-      fetch(FB+'/caidas.json').then(r=>r.json())
+      fetch(FB+'/caidas.json').then(r=>r.json()),
+      fetch(FB+'/kam_reports.json').then(r=>r.json())
     ]);
     _fb.ads_forecast = r1||{};
     _fb.caidas       = r2||{};
+    _fb.kam_reports  = r3||{};
   }catch(e){ console.warn('Firebase load error',e); }
 }
 

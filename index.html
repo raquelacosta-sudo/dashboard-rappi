@@ -32,6 +32,11 @@ main{padding:18px 28px;max-width:1440px;margin:0 auto}
 .kpi-delta.up{color:var(--green)}.kpi-delta.down{color:var(--alert)}.kpi-delta.flat{color:#9CA3AF}
 .kpi-delta.inv-up{color:var(--alert)}.kpi-delta.inv-down{color:var(--green)}
 
+.period-toggle{display:flex;gap:4px;align-items:center;background:#F3F4F6;border-radius:8px;padding:3px}
+.period-btn{padding:5px 14px;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;transition:all .15s;background:transparent;color:#6B7280}
+.period-btn.active{background:#3B82F6;color:#fff;box-shadow:0 1px 3px rgba(59,130,246,.4)}
+.period-badge{font-size:11px;color:#6B7280;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:999px;padding:3px 10px;font-weight:600}
+
 .kpi-brands{margin-top:5px;display:flex;flex-wrap:wrap;gap:2px}
 .kpi-brand-chip{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;white-space:nowrap;cursor:default}
 .kpi-brand-chip.up{background:#DCFCE7;color:#166534}
@@ -131,15 +136,20 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <main>
 <div class="tabs">
   <button class="tab active" onclick="showTab('resumen',this)">📊 Resumen</button>
+  <div class="period-toggle" style="margin-left:8px">
+    <button id="period-btn-semanal" class="period-btn active" onclick="setPeriod('semanal')">Semanal</button>
+  </div>
+  <span id="periodBadge" class="period-badge" style="margin-left:6px"></span>
   <button class="tab" onclick="showTab('marca_detalle',this)">📉 TendenciasXMarca</button>
   <button class="tab" onclick="showTab('lideres',this)">👥 Líder y KAM</button>
   <button class="tab" onclick="showTab('tendencia',this)">📈 Tendencias KAM</button>
-  <button class="tab" onclick="showTab('marcas',this)">📋 WoW Status</button>
+  <button id="wow-tab-btn" class="tab" onclick="showTab('marcas',this)">📋 WoW Status</button>
   <button class="tab" onclick="showTab('alertas',this)">🚨 Alertas Semana</button>
+  <button class="tab" onclick="showTab('alertas_mes',this)">📅 Alertas Mes</button>
   <button class="tab" onclick="showTab('callouts',this)">📊 YoY Status</button>
-  <button class="tab" onclick="showTab('momentos',this)">🕐 Momentos</button>
   <button class="tab" onclick="showTab('caidas',this)">🔍 Zooms Semanales</button>
   <button class="tab" onclick="showTab('ads',this)">📡 Ads & Forecast</button>
+  <button class="tab" onclick="showTab('momentos',this)">🕐 Momentos</button>
 </div>
 
 <!-- RESUMEN -->
@@ -297,6 +307,22 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
   <div class="insights-grid" id="insightsGrid"></div>
   <div class="sec">⚠️ Marcas con alertas</div>
   <div class="alerts-grid" id="alertsGrid"></div>
+</div>
+
+<div id="tab-alertas_mes" class="tab-content">
+  <div class="sec">🚨 Alertas por Marca — Mes Cerrado</div>
+  <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:8px 16px;margin-bottom:12px;font-size:12px;color:#166534">
+    📅 Período: <strong id="almesPeriodBadge"></strong> · Prioridad: caídas ventas+órdenes primero, luego operativo
+  </div>
+  <div style="background:#fff;border-radius:12px;padding:11px 16px;margin-bottom:14px;box-shadow:0 1px 4px rgba(0,0,0,.07);display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <select id="almesFiltLider" onchange="renderAlertasMes()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:7px 11px;font-size:13px">
+      <option value="">Todos los líderes</option>
+    </select>
+    <select id="almesFiltKam" onchange="renderAlertasMes()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:7px 11px;font-size:13px">
+      <option value="">Todos</option>
+    </select>
+  </div>
+  <div class="alerts-grid" id="alertsMesGrid"></div>
 </div>
 
 <style>
@@ -487,7 +513,7 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 </div>
 
 <div id="tab-ads" class="tab-content">
-  <h2 style="margin-bottom:16px;font-size:18px;font-weight:700;color:#1F2937">📡 Ads & Forecast — Semana en Curso</h2>
+  <h2 style="margin-bottom:16px;font-size:18px;font-weight:700;color:#1F2937">📡 Ads & Forecast <span style="background:#DBEAFE;color:#1D4ED8;font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;margin-left:6px;vertical-align:middle">Vista Semanal</span></h2>
 
   <!-- Filters -->
   <div style="display:flex;gap:12px;align-items:center;margin-bottom:20px;flex-wrap:wrap;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:12px 16px">
@@ -654,6 +680,8 @@ function showTab(id,btn){
   if(id==='momentos') initMomentos();
   if(id==='caidas') initCaidas();
   if(id==='ads') initAds();
+  if(id==='alertas_mes') initAlertasMes();
+  if(id==='zoom_mes') initZoomMes();
 }
 
 // ── FILTERS ────────────────────────────────────────────────────────
@@ -716,9 +744,18 @@ function lmBrandChips(fieldName, n, liderF, kamF, fmt){
 function renderResumenLiderTable(){
   const liderF=document.getElementById('resumenLiderSel')?.value||'';
   const liders=liderF?[liderF]:DATA.leaders;
+  // Get period data
+  const {lw:lwIdxs,pw:pwIdxs}=_periodIdxs();
+  const isPeriod=_period!=='semanal';
+  const liderLwData=isPeriod?_aggregateByLider(lwIdxs):{};
+  const liderPwData=isPeriod?_aggregateByLider(pwIdxs):{};
   let totV=0,totPV=0,totO=0,totPO=0,totR=0,totPR=0;
+  // Update section header
+  const sec=document.querySelector('#tab-resumen .sec');
+  if(sec) sec.textContent=`📊 ${_periodLabel()} — Ventas & Órdenes por Líder`;
   const rows=liders.map(l=>{
-    const lw=DATA.lider_data[l]?.lw||{},pw=DATA.lider_data[l]?.pw||{};
+    const lw=isPeriod?(liderLwData[l]||{}):(DATA.lider_data[l]?.lw||{});
+    const pw=isPeriod?(liderPwData[l]||{}):(DATA.lider_data[l]?.pw||{});
     const dV=pw.ventas?((lw.ventas-pw.ventas)/pw.ventas*100):0;
     const dO=pw.ordenes?((lw.ordenes-pw.ordenes)/pw.ordenes*100):0;
     const dR=pw.revenue_ads?((lw.revenue_ads-pw.revenue_ads)/pw.revenue_ads*100):0;
@@ -756,8 +793,14 @@ function renderResumenLiderTable(){
   document.getElementById('resumenLiderTbody').innerHTML=rows.join('');
 
   // Also refresh KPI cards filtered by líder
-  const lw2=liderF?(DATA.lider_data[liderF]?.lw||DATA.lw_totals):DATA.lw_totals;
-  const pw2=liderF?(DATA.lider_data[liderF]?.pw||DATA.pw_totals):DATA.pw_totals;
+  let lw2,pw2;
+  if(isPeriod){
+    lw2=liderF?(liderLwData[liderF]||_aggregateGlobal(lwIdxs)):_aggregateGlobal(lwIdxs);
+    pw2=liderF?(liderPwData[liderF]||_aggregateGlobal(pwIdxs)):_aggregateGlobal(pwIdxs);
+  } else {
+    lw2=liderF?(DATA.lider_data[liderF]?.lw||DATA.lw_totals):DATA.lw_totals;
+    pw2=liderF?(DATA.lider_data[liderF]?.pw||DATA.pw_totals):DATA.pw_totals;
+  }
   const kpis2=[
     ['Ventas LW','green',fmtM(lw2.ventas),deltaHtml(lw2.ventas,pw2.ventas,false,fmtM),'ventas',fmtM],
     ['Órdenes LW','blue',fmtN(lw2.ordenes),deltaHtml(lw2.ordenes,pw2.ordenes,false,fmtN),'ordenes',fmtN],
@@ -775,8 +818,132 @@ function renderResumenLiderTable(){
     `<div class="kpi ${c}"><div class="kpi-label">${l}</div><div class="kpi-value">${v}</div>${d}${brandChips(field,3,liderF,'',fn)}</div>`).join('');
 }
 
+
+// ── PERIOD FILTER ──────────────────────────────────────────────────────────
+let _period='semanal';
+const _MES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function setPeriod(p){
+  _period=p;
+  ['semanal','mensual'].forEach(id=>{
+    const b=document.getElementById('period-btn-'+id);
+    if(b){b.classList.toggle('active',id===p);}
+  });
+  const badge=document.getElementById('periodBadge');
+  if(badge) badge.textContent=_periodLabel();
+  // Re-render currently active tab
+  const activeTab=document.querySelector('.tab-content.active');
+  if(!activeTab)return;
+  const aid=activeTab.id.replace('tab-','');
+  if(aid==='resumen') renderResumenLiderTable();
+  else if(aid==='marca_detalle') renderBrandDetail();
+  else if(aid==='lideres') initLideres();
+  else if(aid==='tendencia') renderTendencias();
+  else if(aid==='marcas') renderMarcas();
+  else if(aid==='alertas') renderAlertas();
+  else if(aid==='callouts') typeof renderCallouts==='function'&&renderCallouts();
+  else if(aid==='caidas') renderCaidasTable();
+}
+
+function _periodLabel(){
+  const weeks=DATA.all_weeks, n=weeks.length;
+  const last=weeks[n-1];
+  const [yr,mo]=last.split('-').map(Number);
+  const moN=_MES[mo-1];
+  if(_period==='semanal') return `Semana ${last.slice(8,10)} ${moN} ${yr}`;
+  // Mensual = last complete month
+  const prevMo=mo===1?12:mo-1, prevYr=mo===1?yr-1:yr;
+  if(_period==='mensual') return `${_MES[prevMo-1]} ${prevYr} vs ${_MES[prevMo-1]} ${prevYr-1}`;
+  if(_period==='mtd')     return `MTD ${moN} ${yr} vs ${moN} ${yr-1}`;
+  return '';
+}
+
+function _periodIdxs(){
+  const weeks=DATA.all_weeks, n=weeks.length;
+  const last=weeks[n-1];
+  const [yr,mo]=last.split('-').map(Number);
+  if(_period==='semanal') return {lw:[n-1],pw:[n-2]};
+  // Mensual = LAST COMPLETE month vs same month prior year
+  const prevMo=mo===1?12:mo-1, prevYr=mo===1?yr-1:yr;
+  const lwIdx=weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===prevYr&&m===prevMo)?i:-1;}).filter(i=>i>=0);
+  const pwIdx=weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===prevYr-1&&m===prevMo)?i:-1;}).filter(i=>i>=0);
+  if(_period==='mensual') return {lw:lwIdx,pw:pwIdx};
+  // MTD = current partial month vs same # of weeks same month last year
+  const mtdIdx=weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===yr&&m===mo)?i:-1;}).filter(i=>i>=0);
+  const lyMoIdx=weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===yr-1&&m===mo)?i:-1;}).filter(i=>i>=0);
+  return {lw:mtdIdx, pw:lyMoIdx.slice(0,mtdIdx.length)};
+}
+
+function _aggregateGlobal(idxs){
+  // Returns object with field names matching lw_totals
+  const SUM=['ventas','ordenes','trafico_ss','bookings_ads','revenue_ads'];
+  const acc={ventas:0,ordenes:0,trafico_ss:0,bookings_ads:0,revenue_ads:0,_wv:0,_wc:0,_wd:0,_wma:0,_wmp:0};
+  for(const [,bd] of Object.entries(DATA.brand_data||{})){
+    for(const i of idxs){
+      const v=(bd.ventas||[])[Math.min(i,(bd.ventas||[]).length-1)]||0;
+      for(const f of SUM) acc[f]+=(bd[f]||[])[Math.min(i,(bd[f]||[]).length-1)]||0;
+      acc._wv+=v;
+      acc._wc+=((bd.pct_cancelaciones||[])[Math.min(i,(bd.pct_cancelaciones||[]).length-1)]||0)*v;
+      acc._wd+=((bd.pct_defectos||[])[Math.min(i,(bd.pct_defectos||[]).length-1)]||0)*v;
+      acc._wma+=((bd.pct_markdown_ally||[])[Math.min(i,(bd.pct_markdown_ally||[]).length-1)]||0)*v;
+      acc._wmp+=((bd.pct_markdown_pro_ally||[])[Math.min(i,(bd.pct_markdown_pro_ally||[]).length-1)]||0)*v;
+    }
+  }
+  return{
+    ventas:acc.ventas, ordenes:acc.ordenes,
+    aov:acc.ordenes>0?acc.ventas/acc.ordenes:0,
+    trafico:acc.trafico_ss,
+    cvr:acc.trafico_ss>0?(acc.ordenes/acc.trafico_ss*100):0,
+    mkd_ally:acc._wv>0?acc._wma/acc._wv:0,
+    mkd_pro:acc._wv>0?acc._wmp/acc._wv:0,
+    bookings_ads:acc.bookings_ads, revenue_ads:acc.revenue_ads,
+    pct_cancel:acc._wv>0?acc._wc/acc._wv:0,
+    pct_defecto:acc._wv>0?acc._wd/acc._wv:0
+  };
+}
+
+function _aggregateByLider(idxs){
+  const bmap={};
+  (DATA.callout_brands||[]).forEach(b=>bmap[b.marca]=b.lider);
+  const SUM=['ventas','ordenes','trafico_ss','bookings_ads','revenue_ads'];
+  const acc={};
+  DATA.leaders.forEach(l=>{acc[l]={ventas:0,ordenes:0,trafico_ss:0,bookings_ads:0,revenue_ads:0,_wv:0,_wc:0,_wd:0,_wma:0,_wmp:0};});
+  for(const [brand,bd] of Object.entries(DATA.brand_data||{})){
+    const l=bmap[brand]; if(!l||!acc[l]) continue;
+    const a=acc[l];
+    for(const i of idxs){
+      const v=(bd.ventas||[])[Math.min(i,(bd.ventas||[]).length-1)]||0;
+      for(const f of SUM) a[f]+=(bd[f]||[])[Math.min(i,(bd[f]||[]).length-1)]||0;
+      a._wv+=v;
+      a._wc+=((bd.pct_cancelaciones||[])[Math.min(i,(bd.pct_cancelaciones||[]).length-1)]||0)*v;
+      a._wd+=((bd.pct_defectos||[])[Math.min(i,(bd.pct_defectos||[]).length-1)]||0)*v;
+      a._wma+=((bd.pct_markdown_ally||[])[Math.min(i,(bd.pct_markdown_ally||[]).length-1)]||0)*v;
+      a._wmp+=((bd.pct_markdown_pro_ally||[])[Math.min(i,(bd.pct_markdown_pro_ally||[]).length-1)]||0)*v;
+    }
+  }
+  const res={};
+  DATA.leaders.forEach(l=>{
+    const a=acc[l];
+    res[l]={
+      ventas:a.ventas, ordenes:a.ordenes,
+      aov:a.ordenes>0?a.ventas/a.ordenes:0,
+      trafico:a.trafico_ss,
+      cvr:a.trafico_ss>0?(a.ordenes/a.trafico_ss*100):0,
+      mkd_ally:a._wv>0?a._wma/a._wv:0,
+      mkd_pro:a._wv>0?a._wmp/a._wv:0,
+      bookings_ads:a.bookings_ads, revenue_ads:a.revenue_ads,
+      pct_cancel:a._wv>0?a._wc/a._wv:0,
+      pct_defecto:a._wv>0?a._wd/a._wv:0
+    };
+  });
+  return res;
+}
+
 // ── RESUMEN ────────────────────────────────────────────────────────
 function initResumen(){
+  // Init period badge
+  const badge=document.getElementById('periodBadge');
+  if(badge) badge.textContent=_periodLabel();
   // Populate Líder filter (once)
   const rLiderSel=document.getElementById('resumenLiderSel');
   if(rLiderSel&&rLiderSel.options.length<=1){
@@ -888,23 +1055,40 @@ function renderBrandDetail(){
   // Avg metrics (rates/percentages) — use weighted avg; sum metrics — use sum
   const avgMetrics=new Set(['aov','cvr_pct','pct_markdown_ally','pct_markdown_pro_ally','pct_cancelaciones','pct_defectos']);
   const n=DATA.all_weeks.length;
+  // Monthly key mapping
+  const MKEY={'ventas':'ventas','ordenes':'ordenes','aov':null,'trafico_ss':'trafico','cvr_pct':'cvr',
+    'pct_markdown_ally':'mkd_ally','pct_markdown_pro_ally':'mkd_pro',
+    'bookings_ads':'bookings','revenue_ads':'revenue','pct_cancelaciones':'pct_cancel','pct_defectos':'pct_defecto'};
+  const isMensual=_period==='mensual';
   const wrap=document.getElementById('brandChartsWrap');
   wrap.innerHTML=metrics.map(([k,l])=>`<div class="brand-chart-card"><h4>${l}</h4><canvas id="bc_${k}"></canvas></div>`).join('');
   metrics.forEach(([k,l,c])=>{
     const isAvg=avgMetrics.has(k);
-    // Build combined series: sum (or avg) across all selected brands per week
-    const len=Math.max(..._selectedBrands.map(b=>(DATA.brand_data[b]||{})[k]?.length||0));
-    const combined=Array.from({length:len},(_,wi)=>{
-      const vals=_selectedBrands.map(b=>{
-        const arr=(DATA.brand_data[b]||{})[k]||[];
-        return arr[wi]??null;
-      }).filter(v=>v!==null&&v!==undefined);
-      if(!vals.length) return null;
-      if(isAvg) return vals.reduce((a,v)=>a+v,0)/vals.length;
-      return vals.reduce((a,v)=>a+v,0);
-    });
+    let chartLabels,combined;
+    if(isMensual){
+      const mds=_selectedBrands.map(b=>_monthlyAggBrand(b));
+      chartLabels=mds[0]?.labels||[];
+      const mk=MKEY[k];
+      if(!mk){
+        // aov: compute from monthly ventas/ordenes
+        combined=chartLabels.map((_,i)=>{const tv=mds.reduce((s,d)=>s+(d.ventas[i]||0),0);const to=mds.reduce((s,d)=>s+(d.ordenes[i]||0),0);return to>0?tv/to:0;});
+      } else if(isAvg){
+        combined=chartLabels.map((_,i)=>{const vs=mds.map(d=>d[mk]?.[i]).filter(v=>v!=null);return vs.length?vs.reduce((a,v)=>a+v,0)/vs.length:0;});
+      } else {
+        combined=chartLabels.map((_,i)=>mds.reduce((s,d)=>s+(d[mk]?.[i]||0),0));
+      }
+    } else {
+      chartLabels=WL;
+      const len=Math.max(..._selectedBrands.map(b=>(DATA.brand_data[b]||{})[k]?.length||0));
+      combined=Array.from({length:len},(_,wi)=>{
+        const vals=_selectedBrands.map(b=>{const arr=(DATA.brand_data[b]||{})[k]||[];return arr[wi]??null;}).filter(v=>v!==null&&v!==undefined);
+        if(!vals.length) return null;
+        if(isAvg) return vals.reduce((a,v)=>a+v,0)/vals.length;
+        return vals.reduce((a,v)=>a+v,0);
+      });
+    }
     const label=_selectedBrands.length===1?_selectedBrands[0]:`${_selectedBrands.length} marcas combinadas`;
-    mkChart('bc_'+k,'line',WL,[{
+    mkChart('bc_'+k,'line',chartLabels,[{
       label, data:combined, borderColor:c,
       backgroundColor:c+'22', fill:_selectedBrands.length>1,
       borderWidth:2, pointRadius:0, tension:.3
@@ -1027,7 +1211,16 @@ function renderTendencias(){
     Object.entries(byL).forEach(([l,kams])=>kams.forEach(kam=>{
       const kd=DATA.kam_trends[l][kam];if(!kd)return;
       const sid='tend_'+l.replace(/[^a-z]/gi,'_')+'_'+kam.replace(/[^a-z0-9]/gi,'_');
-      TMETRICS.forEach(([k,lbl,c])=>mkChart(sid+'_'+k,'line',WL,[{label:lbl,data:kd[k]||[],borderColor:c,backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3}]));
+      if(_period==='mensual'){
+        const mkd=_monthlyAggKam(l,kam);
+        if(mkd&&mkd.ventas?.length){
+          const mlbls=mkd.labels||[];
+          TMETRICS.forEach(([k,lbl,c])=>mkChart(sid+'_'+k,'line',mlbls,[{label:lbl,data:mkd[k]||[],borderColor:c,backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3}]));
+        }
+      } else {
+        const kd2=DATA.kam_trends[l][kam];if(!kd2)return;
+        TMETRICS.forEach(([k,lbl,c])=>mkChart(sid+'_'+k,'line',WL,[{label:lbl,data:kd2[k]||[],borderColor:c,backgroundColor:'transparent',borderWidth:1.5,pointRadius:0,tension:.3}]));
+      }
     }));
   },50);
 }
@@ -1093,45 +1286,34 @@ function initAlertas(){
 function renderAlertas(){
   const liderF=document.getElementById('filtLider').value,kamF=document.getElementById('filtKam').value;
   const n=DATA.all_weeks.length;
-  const bmap={};
-  (DATA.callout_brands||[]).forEach(b=>{bmap[b.marca]={lider:b.lider,kam:b.kam};});
-  const brandAlerts=[];
+  const lwIdx=n-1,pwIdx=Math.max(0,n-2);
+  const bmap={};(DATA.callout_brands||[]).forEach(b=>{bmap[b.marca]={lider:b.lider,kam:b.kam};});
+  const perf_alerts=[],ops_alerts=[];
   for(const [brand,bd] of Object.entries(DATA.brand_data||{})){
     const m=bmap[brand]||{};
     if(liderF&&m.lider!==liderF) continue;
     if(kamF&&m.kam!==kamF) continue;
-    const last=bd.pct_cancelaciones?.length?Math.min(n-1,bd.pct_cancelaciones.length-1):0;
-    const cancel=(bd.pct_cancelaciones||[])[last]||0;
-    const defecto=(bd.pct_defectos||[])[last]||0;
-    const ventas=(bd.ventas||[])[last]||0;
-    const trafico=(bd.trafico_ss||[])[last]||0;
-    const cvr=(bd.cvr_pct||[])[last]||0;
-    const mkd=(bd.pct_markdown_ally||[])[last]||0;
-    if(cancel<4&&defecto<3&&!(trafico>0&&cvr<3&&cvr>0)) continue;
+    const idx=Math.min(lwIdx,(bd.ventas||[]).length-1);
+    const pidx=Math.min(pwIdx,(bd.ventas||[]).length-1);
+    const lwV=(bd.ventas||[])[idx]||0,pwV=(bd.ventas||[])[pidx]||0;
+    const lwO=(bd.ordenes||[])[idx]||0,pwO=(bd.ordenes||[])[pidx]||0;
+    const cancel=(bd.pct_cancelaciones||[])[idx]||0;
+    const defecto=(bd.pct_defectos||[])[idx]||0;
+    const ventas=lwV,trafico=(bd.trafico_ss||[])[idx]||0;
+    const cvr=(bd.cvr_pct||[])[idx]||0;
+    const mkd=(bd.pct_markdown_ally||[])[idx]||0;
+    const dV=pwV>0?(lwV-pwV)/pwV*100:0;
+    const dO=pwO>0?(lwO-pwO)/pwO*100:0;
+    const perfDrop=pwV>0&&dV<-10&&pwO>0&&dO<-10;
+    const hasOps=cancel>=4||defecto>=3||(trafico>0&&cvr<3&&cvr>0);
     const level=(cancel>=6||defecto>=4)?'crit':'warn';
-    brandAlerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas,trafico,cvr,mkd,level});
+    if(perfDrop) perf_alerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas,trafico,cvr,mkd,dV,dO,level,type:'perf'});
+    else if(hasOps) ops_alerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas,trafico,cvr,mkd,dV,dO,level,type:'ops'});
   }
-  brandAlerts.sort((a,b)=>a.level!==b.level?(a.level==='crit'?-1:1):(b.cancel+b.defecto)-(a.cancel+a.defecto));
-  document.getElementById('alertsGrid').innerHTML=brandAlerts.map(a=>{
-    const hasTraf=a.trafico>0;
-    const trafLine=hasTraf?`<div class="as" style="margin-top:3px">🚦 Tráfico: ${fmtN(a.trafico)} · CVR: ${fmtP(a.cvr)}${a.mkd>0?' · MKD: '+fmtP(a.mkd):''}</div>`:'';
-    const accion=a.cancel>=6
-      ?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar horarios y disponibilidad de producto</div>`
-      :a.defecto>=4
-      ?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar calidad de pedidos (faltantes/errores)</div>`
-      :(hasTraf&&a.cvr<3&&a.cvr>0)
-      ?`<div style="font-size:10px;color:#92400E;background:#FFFBEB;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ CVR bajo — revisar fotos, precio y menú. Evaluar MKD Ally</div>`:'';
-    return`<div class="alert-card ${a.level}">
-      <div class="alert-icon">${a.level==='crit'?'🔴':'🟠'}</div>
-      <div style="flex:1">
-        <div class="al">${a.level==='crit'?'CRÍTICO':'ATENCIÓN'} · ${LS[a.lider]||a.lider.split('@')[0]}</div>
-        <div class="am" onclick="goBrand('${a.marca.replace(/'/g,"\\'")}')">${a.marca}</div>
-        <div class="as">KAM: ${a.kam}</div>
-        <div class="as">❌ Cancel: <strong>${fmtP(a.cancel)}</strong> · 🔧 Defecto: <strong>${fmtP(a.defecto)}</strong> · 💰 ${fmtM(a.ventas)}</div>
-        ${trafLine}${accion}
-      </div>
-    </div>`;
-  }).join('')||'<p style="color:#9CA3AF;padding:20px">✅ Sin alertas de brand para este filtro.</p>';
+  perf_alerts.sort((a,b)=>a.dV-b.dV);
+  ops_alerts.sort((a,b)=>a.level!==b.level?(a.level==='crit'?-1:1):(b.cancel+b.defecto)-(a.cancel+a.defecto));
+  const all=[...perf_alerts,...ops_alerts];
+  document.getElementById('alertsGrid').innerHTML=all.length?all.map(a=>_renderAlertCard(a,false)).join(''):'<p style="color:#9CA3AF;padding:20px">✅ Sin alertas para este filtro.</p>';
 }
 // ── PAGINACIÓN ─────────────────────────────────────────────────────
 function renderPag(id,pages,cur,cb){
@@ -1143,6 +1325,251 @@ function renderPag(id,pages,cur,cb){
   if(cur<pages)h+=`<button class="pg-btn" onclick="(${cb})(${cur+1})">›</button>`;
   el.innerHTML=h;
 }
+
+
+// ── MONTHLY AGGREGATION HELPERS ────────────────────────────────────────────
+function _getMonthlyMap(){
+  const weeks=DATA.all_weeks;
+  const map={};
+  weeks.forEach((w,i)=>{
+    const[y,m]=w.split('-').map(Number);
+    const k=y+'_'+String(m).padStart(2,'0');
+    if(!map[k])map[k]={label:_MES[m-1]+' '+String(y).slice(2),idxs:[]};
+    map[k].idxs.push(i);
+  });
+  return map;
+}
+function _monthlyAggBrand(brand){
+  const bd=DATA.brand_data[brand];
+  if(!bd)return{labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+  const map=_getMonthlyMap();
+  const keys=Object.keys(map).sort();
+  const r={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+  for(const k of keys){
+    const{label,idxs}=map[k];
+    r.labels.push(label);
+    let sv=0,so=0,st=0,sb=0,sr=0,wv=0,wc=0,wd=0,wma=0,wmp=0;
+    for(const i of idxs){
+      const ii=Math.min(i,(bd.ventas||[]).length-1);
+      const v=(bd.ventas||[])[ii]||0;
+      sv+=v;so+=(bd.ordenes||[])[ii]||0;st+=(bd.trafico_ss||[])[ii]||0;
+      sb+=(bd.bookings_ads||[])[ii]||0;sr+=(bd.revenue_ads||[])[ii]||0;
+      wv+=v;
+      wc+=((bd.pct_cancelaciones||[])[ii]||0)*v;
+      wd+=((bd.pct_defectos||[])[ii]||0)*v;
+      wma+=((bd.pct_markdown_ally||[])[ii]||0)*v;
+      wmp+=((bd.pct_markdown_pro_ally||[])[ii]||0)*v;
+    }
+    r.ventas.push(sv);r.ordenes.push(so);r.trafico.push(st);
+    r.bookings.push(sb);r.revenue.push(sr);
+    r.cvr.push(st>0?so/st*100:0);
+    r.pct_cancel.push(wv>0?wc/wv:0);r.pct_defecto.push(wv>0?wd/wv:0);
+    r.mkd_ally.push(wv>0?wma/wv:0);r.mkd_pro.push(wv>0?wmp/wv:0);
+  }
+  return r;
+}
+function _monthlyAggKam(lider,kam){
+  const brands=(DATA.callout_brands||[]).filter(b=>b.lider===lider&&b.kam===kam).map(b=>b.marca);
+  const map=_getMonthlyMap();
+  const keys=Object.keys(map).sort();
+  const r={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+  for(const k of keys){
+    const{label,idxs}=map[k];
+    r.labels.push(label);
+    let sv=0,so=0,st=0,sb=0,sr=0,wv=0,wc=0,wd=0,wma=0,wmp=0;
+    for(const brand of brands){
+      const bd=DATA.brand_data[brand];if(!bd)continue;
+      for(const i of idxs){
+        const ii=Math.min(i,(bd.ventas||[]).length-1);
+        const v=(bd.ventas||[])[ii]||0;
+        sv+=v;so+=(bd.ordenes||[])[ii]||0;st+=(bd.trafico_ss||[])[ii]||0;
+        sb+=(bd.bookings_ads||[])[ii]||0;sr+=(bd.revenue_ads||[])[ii]||0;
+        wv+=v;
+        wc+=((bd.pct_cancelaciones||[])[ii]||0)*v;
+        wd+=((bd.pct_defectos||[])[ii]||0)*v;
+        wma+=((bd.pct_markdown_ally||[])[ii]||0)*v;
+        wmp+=((bd.pct_markdown_pro_ally||[])[ii]||0)*v;
+      }
+    }
+    r.ventas.push(sv);r.ordenes.push(so);r.trafico.push(st);
+    r.bookings.push(sb);r.revenue.push(sr);
+    r.cvr.push(st>0?so/st*100:0);
+    r.pct_cancel.push(wv>0?wc/wv:0);r.pct_defecto.push(wv>0?wd/wv:0);
+    r.mkd_ally.push(wv>0?wma/wv:0);r.mkd_pro.push(wv>0?wmp/wv:0);
+  }
+  return r;
+}
+
+// ── ALERTAS MES ─────────────────────────────────────────────────────────────
+function _getMensualIdxsFixed(prev){
+  const weeks=DATA.all_weeks,n=weeks.length;
+  const last=weeks[n-1];
+  const [yr,mo]=last.split('-').map(Number);
+  const prevMo=mo===1?12:mo-1,prevYr=mo===1?yr-1:yr;
+  if(!prev)return weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===prevYr&&m===prevMo)?i:-1;}).filter(i=>i>=0);
+  return weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===prevYr-1&&m===prevMo)?i:-1;}).filter(i=>i>=0);
+}
+function _getMensualLabel(){
+  const weeks=DATA.all_weeks,n=weeks.length;
+  const last=weeks[n-1];
+  const [yr,mo]=last.split('-').map(Number);
+  const prevMo=mo===1?12:mo-1,prevYr=mo===1?yr-1:yr;
+  return _MES[prevMo-1]+' '+prevYr+' vs '+_MES[prevMo-1]+' '+(prevYr-1);
+}
+function initAlertasMes(){
+  const liderSel=document.getElementById('almesFiltLider');
+  if(liderSel&&liderSel.options.length<=1){
+    DATA.leaders.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=LS[l]||l.split('@')[0];liderSel.appendChild(o);});
+  }
+  const badge=document.getElementById('almesPeriodBadge');
+  if(badge) badge.textContent=_getMensualLabel();
+  renderAlertasMes();
+}
+function renderAlertasMes(){
+  const liderF=document.getElementById('almesFiltLider')?.value||'';
+  const kamSel=document.getElementById('almesFiltKam');
+  if(kamSel){
+    const cur=kamSel.value;
+    kamSel.innerHTML='<option value="">Todos</option>';
+    const kams=[...new Set((DATA.callout_brands||[]).filter(b=>!liderF||b.lider===liderF).map(b=>b.kam))].sort();
+    kams.forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;if(k===cur)o.selected=true;kamSel.appendChild(o);});
+  }
+  const kamF=document.getElementById('almesFiltKam')?.value||'';
+  const lwIdxs=_getMensualIdxsFixed(false);
+  const pyIdxs=_getMensualIdxsFixed(true);
+  if(!lwIdxs.length){document.getElementById('alertsMesGrid').innerHTML='<p style="color:#9CA3AF;padding:20px">Sin datos de mes cerrado.</p>';return;}
+  const bmap={};(DATA.callout_brands||[]).forEach(b=>{bmap[b.marca]={lider:b.lider,kam:b.kam};});
+  const perf_alerts=[],ops_alerts=[];
+  for(const [brand,bd] of Object.entries(DATA.brand_data||{})){
+    const m=bmap[brand]||{};
+    if(liderF&&m.lider!==liderF) continue;
+    if(kamF&&m.kam!==kamF) continue;
+    let lwV=0,pyV=0,lwO=0,pyO=0,wv=0,wc=0,wd=0,wt=0,wo=0;
+    for(const i of lwIdxs){
+      const ii=Math.min(i,(bd.ventas||[]).length-1);
+      const v=(bd.ventas||[])[ii]||0;
+      lwV+=v;lwO+=(bd.ordenes||[])[ii]||0;
+      wv+=v;wc+=((bd.pct_cancelaciones||[])[ii]||0)*v;
+      wd+=((bd.pct_defectos||[])[ii]||0)*v;
+      wt+=(bd.trafico_ss||[])[ii]||0;wo+=(bd.ordenes||[])[ii]||0;
+    }
+    for(const i of pyIdxs){const ii=Math.min(i,(bd.ventas||[]).length-1);pyV+=(bd.ventas||[])[ii]||0;pyO+=(bd.ordenes||[])[ii]||0;}
+    const cancel=wv>0?wc/wv:0,defecto=wv>0?wd/wv:0,cvr=wt>0?wo/wt*100:0;
+    const dV=pyV>0?(lwV-pyV)/pyV*100:0,dO=pyO>0?(lwO-pyO)/pyO*100:0;
+    const perfDrop=pyV>0&&dV<-10&&pyO>0&&dO<-10;
+    const hasOps=cancel>=4||defecto>=3||(wt>0&&cvr<3&&cvr>0);
+    const level=(cancel>=6||defecto>=4)?'crit':'warn';
+    if(perfDrop) perf_alerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas:lwV,trafico:wt,cvr,dV,dO,level,type:'perf'});
+    else if(hasOps) ops_alerts.push({marca:brand,lider:m.lider||'',kam:m.kam||'',cancel,defecto,ventas:lwV,trafico:wt,cvr,dV,dO,level,type:'ops'});
+  }
+  perf_alerts.sort((a,b)=>a.dV-b.dV);
+  ops_alerts.sort((a,b)=>a.level!==b.level?(a.level==='crit'?-1:1):(b.cancel+b.defecto)-(a.cancel+a.defecto));
+  const all=[...perf_alerts,...ops_alerts];
+  const grid=document.getElementById('alertsMesGrid');
+  if(!grid)return;
+  grid.innerHTML=all.length?all.map(a=>_renderAlertCard(a,true)).join(''):'<p style="color:#9CA3AF;padding:20px">✅ Sin alertas mensuales.</p>';
+}
+function _renderAlertCard(a,isMonthly){
+  const hasTraf=a.trafico>0;
+  const perfLine=a.type==='perf'?`<div class="as" style="color:#DC2626;margin-top:3px">📉 Ventas: ${a.dV.toFixed(1)}% · Órdenes: ${a.dO.toFixed(1)}% vs ${isMonthly?'mismo mes LY':'semana anterior'}</div>`:'';
+  const trafLine=hasTraf?`<div class="as" style="margin-top:3px">🚦 Tráfico: ${fmtN(a.trafico)} · CVR: ${fmtP(a.cvr)}${a.mkd>0?' · MKD: '+fmtP(a.mkd):''}</div>`:'';
+  const accion=a.type==='perf'
+    ?`<div style="font-size:10px;color:#1E40AF;background:#EFF6FF;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">📊 Revisar tráfico, conversión y pricing — caída en ventas+órdenes</div>`
+    :a.cancel>=6?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar horarios y disponibilidad</div>`
+    :a.defecto>=4?`<div style="font-size:10px;color:#B91C1C;background:#FEF2F2;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ Revisar calidad de pedidos</div>`
+    :(hasTraf&&a.cvr<3&&a.cvr>0)?`<div style="font-size:10px;color:#92400E;background:#FFFBEB;border-radius:4px;padding:4px 6px;margin-top:4px;font-weight:600">⚡ CVR bajo — revisar fotos, precio y menú. Evaluar MKD Ally</div>`:'';
+  const icon=a.type==='perf'?'📉':a.level==='crit'?'🔴':'🟠';
+  const cat=a.type==='perf'?'CAÍDA VENTAS':'OPERATIVO';
+  return`<div class="alert-card ${a.type==='perf'?'warn':a.level}">
+    <div class="alert-icon">${icon}</div>
+    <div style="flex:1">
+      <div class="al">${cat} · ${LS[a.lider]||a.lider.split('@')[0]}</div>
+      <div class="am" onclick="goBrand('${a.marca.replace(/'/g,"\\'")}')">${a.marca}</div>
+      <div class="as">KAM: ${a.kam}</div>
+      <div class="as">❌ Cancel: <strong>${fmtP(a.cancel)}</strong> · 🔧 Defecto: <strong>${fmtP(a.defecto)}</strong> · 💰 ${fmtM(a.ventas)}</div>
+      ${perfLine}${trafLine}${accion}
+    </div>
+  </div>`;
+}
+
+// ── ZOOM MES ─────────────────────────────────────────────────────────────────
+function initZoomMes(){
+  const liderSel=document.getElementById('zoomMesLiderSel');
+  if(liderSel&&liderSel.options.length<=1){
+    DATA.leaders.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=LS[l]||l.split('@')[0];liderSel.appendChild(o);});
+  }
+  const badge=document.getElementById('zoomMesPeriodBadge');
+  if(badge) badge.textContent=_getMensualLabel();
+  onZoomMesLiderChange();
+}
+function onZoomMesLiderChange(){
+  const l=document.getElementById('zoomMesLiderSel')?.value||'';
+  const kamSel=document.getElementById('zoomMesKamSel');
+  if(kamSel){
+    const cur=kamSel.value;
+    kamSel.innerHTML='<option value="">Todos los KAMs</option>';
+    const kams=[...new Set((DATA.callout_brands||[]).filter(b=>!l||b.lider===l).map(b=>b.kam))].sort();
+    kams.forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;if(k===cur)o.selected=true;kamSel.appendChild(o);});
+  }
+  renderZoomMes();
+}
+function renderZoomMes(){
+  const liderF=document.getElementById('zoomMesLiderSel')?.value||'';
+  const kamF=document.getElementById('zoomMesKamSel')?.value||'';
+  const lwIdxs=_getMensualIdxsFixed(false);
+  const pyIdxs=_getMensualIdxsFixed(true);
+  if(!lwIdxs.length){document.getElementById('zoomMesTableWrap').innerHTML='<p style="color:#9CA3AF;padding:20px">Sin datos de mes cerrado.</p>';return;}
+  const bmap={};(DATA.callout_brands||[]).forEach(b=>{bmap[b.marca]={lider:b.lider,kam:b.kam};});
+  const brands=(DATA.callout_brands||[]).filter(b=>(!kamF||b.kam===kamF)&&(!liderF||b.lider===liderF));
+  const rows=[];
+  for(const {marca:brand,lider,kam} of brands){
+    const bd=DATA.brand_data[brand];if(!bd)continue;
+    let lwV=0,pyV=0,lwO=0,pyO=0,lwT=0;
+    for(const i of lwIdxs){const ii=Math.min(i,(bd.ventas||[]).length-1);lwV+=(bd.ventas||[])[ii]||0;lwO+=(bd.ordenes||[])[ii]||0;lwT+=(bd.trafico_ss||[])[ii]||0;}
+    for(const i of pyIdxs){const ii=Math.min(i,(bd.ventas||[]).length-1);pyV+=(bd.ventas||[])[ii]||0;pyO+=(bd.ordenes||[])[ii]||0;}
+    const dV=pyV>0?(lwV-pyV)/pyV*100:null;
+    const dO=pyO>0?(lwO-pyO)/pyO*100:null;
+    rows.push({brand,lider,kam,lwV,lwO,lwT,pyV,pyO,dV,dO});
+  }
+  rows.sort((a,b)=>(a.dV===null?100:a.dV)-(b.dV===null?100:b.dV));
+  const wrap=document.getElementById('zoomMesTableWrap');
+  if(!rows.length){wrap.innerHTML='<p style="color:#9CA3AF;padding:20px">Sin marcas para el filtro.</p>';return;}
+  let tRows='';
+  rows.forEach((r,i)=>{
+    const dV=r.dV,dO=r.dO;
+    const vc=dV===null?'#6B7280':dV>=0?'#059669':'#DC2626';
+    const oc=dO===null?'#6B7280':dO>=0?'#059669':'#DC2626';
+    const av=dV===null?'—':dV>=0?'▲':'▼';
+    const ao=dO===null?'—':dO>=0?'▲':'▼';
+    const bg=dV!==null&&dV<-15?'#FFF5F5':i%2===0?'#fff':'#FAFAFA';
+    tRows+=`<tr style="border-bottom:1px solid #F3F4F6;background:${bg}">
+      <td style="padding:8px 10px;color:#9CA3AF;font-weight:600">${i+1}</td>
+      <td style="padding:8px 10px;font-weight:600;cursor:pointer;color:var(--red)" onclick="goBrand('${r.brand.replace(/'/g,"\\'")}'">${r.brand}</td>
+      <td style="padding:8px 10px"><span class="tag-lider">${LS[r.lider]||r.lider}</span></td>
+      <td style="padding:8px 10px;color:#6B7280">${r.kam}</td>
+      <td style="padding:8px 10px;text-align:right">${fmtM(r.lwV)}</td>
+      <td style="padding:8px 10px;text-align:right;color:${vc};font-weight:700">${av} ${dV!==null?Math.abs(dV).toFixed(1)+'%':'—'}</td>
+      <td style="padding:8px 10px;text-align:right;color:#9CA3AF">${fmtM(r.pyV)}</td>
+      <td style="padding:8px 10px;text-align:right">${fmtN(r.lwO)}</td>
+      <td style="padding:8px 10px;text-align:right;color:${oc};font-weight:700">${ao} ${dO!==null?Math.abs(dO).toFixed(1)+'%':'—'}</td>
+      <td style="padding:8px 10px;text-align:right">${fmtN(r.lwT)}</td>
+    </tr>`;
+  });
+  wrap.innerHTML=`<div style="font-size:11px;color:#6B7280;margin-bottom:8px">Ordenadas por Δ GMV YoY · ${rows.length} marcas · ${_getMensualLabel()}</div>
+  <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+    <thead><tr style="background:#1F2937;color:#fff">
+      <th style="padding:8px 10px">#</th><th style="padding:8px 10px">Marca</th><th style="padding:8px 10px">Líder</th><th style="padding:8px 10px">KAM</th>
+      <th style="padding:8px 10px;text-align:right">Ventas Mes</th>
+      <th style="padding:8px 10px;text-align:right">Δ GMV YoY</th>
+      <th style="padding:8px 10px;text-align:right">Ventas LY</th>
+      <th style="padding:8px 10px;text-align:right">Órdenes</th>
+      <th style="padding:8px 10px;text-align:right">Δ Ord YoY</th>
+      <th style="padding:8px 10px;text-align:right">Tráfico</th>
+    </tr></thead>
+    <tbody>${tRows}</tbody>
+  </table></div>`;
+}
+
 
 // ── INIT ───────────────────────────────────────────────────────────
 populateKamFilter();
@@ -1732,7 +2159,7 @@ function renderCaidasTable(){
     return {...b,ord_lw,ord_pw,delta_ord_lw,delta_ord_nom,nomLoss,peso};
   });
 
-  const declining=enriched.filter(b=>b.nomLoss>0).sort((a,b)=>b.nomLoss-a.nomLoss).slice(0,5);
+  const declining=enriched.filter(b=>b.nomLoss>0).sort((a,b)=>(a.delta_lw??0)-(b.delta_lw??0));
 
   if(!declining.length){
     wrap.innerHTML='<p style="color:#6B7280;font-size:13px;padding:16px">No hay caídas registradas para este KAM esta semana. 🎉</p>';
@@ -1755,7 +2182,7 @@ function renderCaidasTable(){
     const vColor=vPct<0?red:green;
     const oColor=oPct!==null&&oPct<0?red:green;
     const barW=Math.round((b.nomLoss/maxLoss)*100);
-    const medal=['🥇','🥈','🥉','4°','5°'][i]||'';
+    const medal=i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'°';
     const marcaEsc=b.marca.replace(/'/g,"\\'").replace(/"/g,'&quot;');
     return `<tr style="border-bottom:1px solid #F3F4F6;${i%2===0?'background:#FAFAFA':''}">
       <td style="padding:10px 12px;min-width:180px">

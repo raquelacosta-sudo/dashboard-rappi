@@ -115,6 +115,7 @@ tbody td{padding:7px 10px;white-space:nowrap}
 footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 @media(max-width:768px){main{padding:10px}.charts-grid{grid-template-columns:1fr}}
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
 <header>
@@ -3121,4 +3122,263 @@ function renderAdsForecastTable(){
   }
 })();
 </script>
+
+<style id="rappi-brand-override">
+/* ==========================================================
+   RAPPI BRAND OVERRIDES — Sistema de marca aplicado al dashboard
+   Modo: Interno (KAMs/Lideres) — métricas internas permitidas
+   Paleta: Neón #fe663d → #ff3d55 (-45°) + secundarios pastel
+   Tipografía: Nunito (proxy web de Jornada Sans)
+   ========================================================== */
+
+:root{
+  --rappi-orange:#fe663d;
+  --rappi-magenta:#ff3d55;
+  --rappi-gradient:linear-gradient(-45deg,#fe663d 0%,#ff3d55 100%);
+  --rappi-gradient-soft:linear-gradient(-45deg,rgba(254,102,61,.10),rgba(255,61,85,.10));
+  --rappi-beige:#fff0dd;
+  --rappi-beige-dark:#633D11;
+  --rappi-blue:#d9f1ff;
+  --rappi-blue-dark:#0F3749;
+  --rappi-pink:#f4dff6;
+  --rappi-pink-dark:#4F145E;
+  --rappi-purple:#e5dcff;
+  --rappi-purple-dark:#0B1066;
+  --rappi-violet:#F4F0FC;
+  --rappi-violet-dark:#4C2B8C;
+  --rappi-green:#eafce6;
+  --rappi-green-dark:#083410;
+  --rappi-dark:#1A1A2E;
+}
+
+/* Tipografía global — Nunito (Jornada Sans equivalent web) */
+body, html, .controls select, table, .tab, .kpi-value, .kpi-label,
+.lm-value, .lm-label, .sec, .am, .as, .al, .pill, .badge, button, input{
+  font-family:'Nunito','Jornada Sans','Segoe UI',system-ui,-apple-system,sans-serif !important;
+}
+
+body{background:var(--rappi-beige) !important;color:var(--rappi-dark) !important;font-weight:500}
+
+/* HEADER — gradient neón */
+header{
+  background:var(--rappi-gradient) !important;
+  box-shadow:0 4px 16px rgba(254,102,61,.25) !important;
+}
+header .logo{color:#fff !important;font-weight:900 !important;letter-spacing:-.3px}
+header .meta{color:rgba(255,255,255,.85) !important}
+header .meta strong{color:#fff !important}
+
+/* BADGE — fondo blanco con texto neón */
+header .badge{
+  background:#fff !important;
+  color:var(--rappi-orange) !important;
+  font-weight:900 !important;
+  letter-spacing:.5px;
+  box-shadow:0 1px 3px rgba(0,0,0,.1);
+}
+
+/* CONTROLES — bordes neón en focus */
+.controls{background:#fff !important;border-bottom:2px solid #FFE6DD !important}
+.controls label{color:var(--rappi-orange) !important;font-weight:800 !important}
+.controls select:focus{border-color:var(--rappi-orange) !important;box-shadow:0 0 0 3px rgba(254,102,61,.15)}
+
+/* SECTION TITLES — barra gradient neón */
+.sec{
+  font-size:16px !important;
+  font-weight:900 !important;
+  color:var(--rappi-dark) !important;
+  letter-spacing:-.3px;
+  margin:24px 0 12px !important;
+}
+.sec::before{
+  width:5px !important;height:20px !important;
+  background:var(--rappi-gradient) !important;
+  border-radius:4px !important;
+}
+
+/* KPI CARDS — paleta de familias Rappi rotando */
+.kpi{
+  background:#fff !important;
+  border-radius:14px !important;
+  padding:14px 16px !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.05) !important;
+  border-left:4px solid transparent !important;
+  transition:transform .15s, box-shadow .15s;
+}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(254,102,61,.15) !important}
+
+/* Tipos de KPI por color */
+.kpi.green{
+  background:linear-gradient(135deg,#fff 0%, var(--rappi-green) 100%) !important;
+  border-left-color:var(--rappi-green-dark) !important;
+}
+.kpi.green .kpi-value{color:var(--rappi-green-dark) !important}
+
+.kpi.blue{
+  background:linear-gradient(135deg,#fff 0%, var(--rappi-blue) 100%) !important;
+  border-left-color:var(--rappi-blue-dark) !important;
+}
+.kpi.blue .kpi-value{color:var(--rappi-blue-dark) !important}
+
+.kpi.purple{
+  background:linear-gradient(135deg,#fff 0%, var(--rappi-purple) 100%) !important;
+  border-left-color:var(--rappi-purple-dark) !important;
+}
+.kpi.purple .kpi-value{color:var(--rappi-purple-dark) !important}
+
+.kpi.yellow, .kpi.orange{
+  background:linear-gradient(135deg,#fff 0%, var(--rappi-beige) 100%) !important;
+  border-left-color:var(--rappi-orange) !important;
+}
+.kpi.yellow .kpi-value, .kpi.orange .kpi-value{color:var(--rappi-orange) !important}
+
+.kpi.red{
+  background:var(--rappi-gradient) !important;
+  border-left-color:#fff !important;
+  color:#fff !important;
+}
+.kpi.red .kpi-label, .kpi.red .kpi-value, .kpi.red .kpi-sub{color:#fff !important}
+.kpi.red .kpi-delta.up{color:#DCFCE7 !important}
+.kpi.red .kpi-delta.down{color:#FEE2E2 !important}
+
+.kpi-label{color:#6B7280 !important;font-weight:800 !important;letter-spacing:.8px}
+.kpi-value{font-weight:900 !important;font-size:23px !important;letter-spacing:-.5px}
+
+/* TABS — activa con neón */
+.tabs{border-bottom:2px solid #FFE6DD !important}
+.tab{font-weight:700 !important;color:#9CA3AF !important;font-size:13px !important;padding:11px 18px !important}
+.tab:hover{color:var(--rappi-orange) !important}
+.tab.active{
+  color:var(--rappi-orange) !important;
+  border-bottom:3px solid !important;
+  border-image:var(--rappi-gradient) 1 !important;
+  border-bottom-color:var(--rappi-orange) !important;
+}
+
+/* TAG LIDER — beige con texto neón */
+.tag-lider{
+  background:var(--rappi-beige) !important;
+  color:var(--rappi-orange) !important;
+  font-weight:800 !important;
+  border-radius:6px !important;
+  padding:3px 8px !important;
+}
+
+/* HEADER LIDER — gradient neón */
+.lider-header{
+  background:var(--rappi-gradient) !important;
+  border-radius:12px 12px 0 0 !important;
+  box-shadow:0 2px 8px rgba(254,102,61,.2);
+}
+.lider-header h3{color:#fff !important;font-weight:900 !important;letter-spacing:-.3px}
+
+/* LIDER METRICS GRID */
+.lider-metrics-grid{
+  background:#fff !important;
+  border:1px solid #FFE6DD !important;
+  border-top:none !important;
+  border-radius:0 0 12px 12px;
+}
+.lm-item{
+  background:var(--rappi-beige) !important;
+  border-radius:8px !important;
+  border:1px solid rgba(254,102,61,.08);
+}
+.lm-label{color:var(--rappi-beige-dark) !important;font-weight:800 !important}
+.lm-value{font-weight:900 !important;color:var(--rappi-dark) !important}
+
+/* BRAND DETAIL */
+.brand-detail{
+  background:#fff !important;
+  border-radius:14px !important;
+  box-shadow:0 2px 10px rgba(0,0,0,.06) !important;
+  border:1px solid #FFE6DD;
+}
+
+/* PILLS */
+.pill{font-weight:800 !important;letter-spacing:.3px}
+.pill.ok{background:var(--rappi-green) !important;color:var(--rappi-green-dark) !important}
+.pill.warn{background:var(--rappi-beige) !important;color:var(--rappi-orange) !important}
+.pill.crit{background:#FEE2E2 !important;color:#991B1B !important}
+
+/* PAGINATION */
+.pg-btn.active{
+  background:var(--rappi-gradient) !important;
+  border-color:var(--rappi-orange) !important;
+  color:#fff !important;
+  font-weight:900 !important;
+}
+
+/* PERIOD TOGGLE — botón activo gradient */
+.period-btn.active{
+  background:var(--rappi-gradient) !important;
+  color:#fff !important;
+  box-shadow:0 2px 6px rgba(254,102,61,.35) !important;
+}
+
+/* TABLE — header beige */
+thead th{
+  background:var(--rappi-beige) !important;
+  color:var(--rappi-beige-dark) !important;
+  font-weight:800 !important;
+  border-bottom:2px solid var(--rappi-orange) !important;
+}
+thead th:hover{background:#FFE6DD !important}
+tbody tr:hover{background:#FFF8F2 !important}
+
+/* TABLE WRAP */
+.table-wrap{
+  border-radius:14px !important;
+  box-shadow:0 2px 10px rgba(0,0,0,.06) !important;
+  border:1px solid #FFE6DD;
+}
+.table-search input:focus{border-color:var(--rappi-orange) !important;box-shadow:0 0 0 3px rgba(254,102,61,.15)}
+
+/* CHARTS — fondo card uniformizado */
+.chart-card{
+  background:#fff !important;
+  border-radius:14px !important;
+  box-shadow:0 2px 10px rgba(0,0,0,.06) !important;
+  border:1px solid #FFE6DD;
+}
+.chart-card h3{color:var(--rappi-dark) !important;font-weight:800 !important;letter-spacing:-.2px}
+
+/* ALERT CARDS */
+.alert-card{
+  border-radius:12px !important;
+  box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
+  border-left-width:5px !important;
+}
+.alert-card.crit{border-left-color:var(--rappi-magenta) !important;background:linear-gradient(135deg,#fff 0%,#FFF0F2 100%) !important}
+.alert-card.warn{border-left-color:var(--rappi-orange) !important;background:linear-gradient(135deg,#fff 0%,var(--rappi-beige) 100%) !important}
+.alert-card.crit .alert-icon{background:#FEE2E2 !important;color:#991B1B}
+.alert-card.warn .alert-icon{background:var(--rappi-beige) !important;color:var(--rappi-orange)}
+.am:hover{color:var(--rappi-orange) !important}
+
+/* Var deltas */
+.var-up, .kpi-delta.up{color:var(--rappi-green-dark) !important;font-weight:800 !important}
+.var-down, .kpi-delta.down{color:var(--rappi-magenta) !important;font-weight:800 !important}
+
+/* Section header del Diagnóstico — fondo beige+borde neón */
+.tab-content > div[style*="background:#F0FDF4"],
+.tab-content > div[style*="background:#FFF8E1"]{
+  background:var(--rappi-beige) !important;
+  border:1px solid var(--rappi-orange) !important;
+  color:var(--rappi-beige-dark) !important;
+}
+
+/* Logo de Rappi (mostacho ASCII fallback) — placeholder visual */
+header .logo::before{
+  content:'';
+  display:inline-block;
+  width:28px;height:28px;
+  background:#fff;
+  border-radius:50%;
+  margin-right:4px;
+  /* Mostacho minimalista en CSS */
+  background-image:radial-gradient(ellipse at 30% 50%,var(--rappi-orange) 0,var(--rappi-orange) 35%,transparent 36%),
+                   radial-gradient(ellipse at 70% 50%,var(--rappi-magenta) 0,var(--rappi-magenta) 35%,transparent 36%);
+}
+</style>
+
 </body></html>  

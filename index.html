@@ -118,6 +118,136 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body>
+
+<!-- ============= AUTH GATE — Solo @rappi.com ============= -->
+<style id="auth-styles">
+#authGate{position:fixed;inset:0;background:linear-gradient(135deg,#fe663d 0%,#ff3d55 100%);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;font-family:Nunito,system-ui,sans-serif;padding:24px;text-align:center}
+#authGate.hidden{display:none}
+#authBox{background:rgba(255,255,255,.12);backdrop-filter:blur(20px);border-radius:24px;padding:40px 36px;max-width:420px;width:100%;border:1px solid rgba(255,255,255,.25);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+#authBox h1{font-size:28px;font-weight:900;margin:0 0 6px;letter-spacing:-1px}
+#authBox .sub{font-size:13px;opacity:.85;margin-bottom:28px;line-height:1.4}
+#authBox .lock{font-size:48px;margin-bottom:14px}
+#g_id_signin{display:flex;justify-content:center;margin-bottom:14px}
+#authError{background:rgba(0,0,0,.25);color:#FFE6DD;padding:10px 14px;border-radius:10px;font-size:12px;margin-top:14px;display:none;font-weight:600}
+#authError.show{display:block}
+#authFooter{font-size:10px;opacity:.7;margin-top:24px}
+</style>
+
+<div id="authGate">
+  <div id="authBox">
+    <div class="lock">🔒</div>
+    <h1>Dashboard Comercial Rappi MX</h1>
+    <div class="sub">Acceso restringido a cuentas <strong>@rappi.com</strong></div>
+    <div id="g_id_signin"></div>
+    <div id="authError">⚠️ Solo cuentas <strong>@rappi.com</strong> tienen acceso. Intenta con tu correo Rappi.</div>
+    <div id="authFooter">Tu sesión durará 7 días en este dispositivo</div>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script id="auth-js">
+(function(){
+  // PASO 1: Reemplaza esto con tu Client ID de Google Cloud Console
+  // Ver instrucciones al pie del archivo
+  const GOOGLE_CLIENT_ID = '1025219808688-3rp5gubo51pkdfajdjn66opihgcj9uj7.apps.googleusercontent.com';
+  const ALLOWED_DOMAIN = 'rappi.com';
+  const SESSION_DAYS = 7;
+
+  // Check existing session
+  function getSession(){
+    try {
+      const raw = localStorage.getItem('rappi_dashboard_auth');
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(obj.exp > Date.now() && obj.email && obj.email.endsWith('@'+ALLOWED_DOMAIN)){
+        return obj;
+      }
+      return null;
+    } catch(e){ return null; }
+  }
+
+  function saveSession(email){
+    localStorage.setItem('rappi_dashboard_auth', JSON.stringify({
+      email: email,
+      exp: Date.now() + SESSION_DAYS*24*60*60*1000
+    }));
+  }
+
+  function unlock(email){
+    const gate = document.getElementById('authGate');
+    if(gate) gate.classList.add('hidden');
+    // Add user badge in top right
+    setTimeout(function(){
+      const meta = document.querySelector('header .meta');
+      if(meta && !document.getElementById('authUserBadge')){
+        const badge = document.createElement('div');
+        badge.id = 'authUserBadge';
+        badge.style.cssText = 'font-size:10px;opacity:.85;cursor:pointer';
+        badge.title = 'Click para cerrar sesión';
+        badge.innerHTML = '👤 '+email+' <span style="opacity:.6">| salir</span>';
+        badge.onclick = function(){
+          if(confirm('¿Cerrar sesión?')){
+            localStorage.removeItem('rappi_dashboard_auth');
+            location.reload();
+          }
+        };
+        meta.appendChild(badge);
+      }
+    }, 100);
+  }
+
+  function handleCredentialResponse(response){
+    try {
+      const payload = JSON.parse(atob(response.credential.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      const email = (payload.email||'').toLowerCase();
+      if(email.endsWith('@'+ALLOWED_DOMAIN) && payload.email_verified){
+        saveSession(email);
+        unlock(email);
+      } else {
+        document.getElementById('authError').classList.add('show');
+        localStorage.removeItem('rappi_dashboard_auth');
+      }
+    } catch(e){
+      document.getElementById('authError').classList.add('show');
+      console.error('Auth error:', e);
+    }
+  }
+
+  // Try existing session first
+  const existing = getSession();
+  if(existing){
+    unlock(existing.email);
+    return;
+  }
+
+  // Init Google Sign-In once script loads
+  function tryInit(){
+    if(typeof google === 'undefined' || !google.accounts || !google.accounts.id){
+      setTimeout(tryInit, 100);
+      return;
+    }
+    if(GOOGLE_CLIENT_ID.startsWith('REEMPLAZAR')){
+      document.getElementById('g_id_signin').innerHTML =
+        '<div style="background:rgba(0,0,0,.3);padding:14px;border-radius:10px;font-size:11px;color:#fff;line-height:1.5;text-align:left">⚙️ <strong>Falta configurar el Client ID de Google.</strong><br>Ve a <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#FFE6DD">console.cloud.google.com</a> → Credentials → Create OAuth Client ID → Web app → autoriza tu URL de Pages, copia el Client ID y pégalo en el archivo HTML reemplazando el placeholder.</div>';
+      return;
+    }
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: handleCredentialResponse,
+      hd: ALLOWED_DOMAIN, // hosted domain hint
+      auto_select: false,
+      cancel_on_tap_outside: false
+    });
+    google.accounts.id.renderButton(
+      document.getElementById('g_id_signin'),
+      { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 280 }
+    );
+  }
+  tryInit();
+})();
+</script>
+<!-- ============= /AUTH GATE ============= -->
+
 <header>
   <div class="logo">🛵 <span>Dashboard Comercial</span> <span class="badge">Rappi MX</span></div>
   <div class="meta">Actualizado cada lunes</div>

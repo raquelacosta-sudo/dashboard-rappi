@@ -1954,10 +1954,6 @@ function renderMarcas(){
     }
     const cp=`<span class="pill ${pct_cancel>=6?'crit':pct_cancel>=4?'warn':'ok'}">${fmtP(pct_cancel)}</span>`;
     const dp=`<span class="pill ${pct_defecto>=4?'crit':pct_defecto>=2.5?'warn':'ok'}">${fmtP(pct_defecto)}</span>`;
-    const _last=arr=>(arr&&arr.length?arr[arr.length-1]:0);
-    const _prev=arr=>(arr&&arr.length>=2?arr[arr.length-2]:0);
-    const _delta=(a,b)=>(a||0)-(b||0);
-    const _dPct=(a,b)=>{const p=b>0?((a-b)/b*100):null; return p;};
     const _delta=(a,b)=>(a||0)-(b||0);
     const _dPct=(a,b)=>{const p=b>0?((a-b)/b*100):null; return p;};
     const dvNom=_delta(ventas,ventas_p);
@@ -4660,7 +4656,7 @@ function renderYoYCartera(){
     html += '<div style="background:#fff;border-radius:14px;margin-bottom:18px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow:hidden">';
     
     // Header del líder (clickeable para expandir)
-    html += '<div onclick="toggleYoYLider(''+L.lider.replace(/'/g,"\\'")+'')" style="background:linear-gradient(-45deg,#fe663d,#ff3d55);color:#fff;padding:14px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">';
+    html += '<div onclick="toggleYoYLider(this.dataset.lider)" data-lider="' + L.lider + '" style="background:linear-gradient(-45deg,#fe663d,#ff3d55);color:#fff;padding:14px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">';
     html += '<div><div style="font-size:16px;font-weight:900;letter-spacing:-.3px">'+LSname(L.lider)+'</div>';
     html += '<div style="font-size:11px;opacity:.9;margin-top:2px">'+Object.keys(L.kams).length+' KAMs · '+L.brands_count+' marcas</div></div>';
     html += '<div style="font-size:13px;font-weight:800">'+(expanded?'▼':'▶')+'</div></div>';

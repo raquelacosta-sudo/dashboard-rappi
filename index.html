@@ -840,11 +840,18 @@ const DATA = {"last_week_str":"4 May 2026","prev_week_str":"27 Apr 2026","alert_
 const WEEKS = DATA.all_weeks;
 const _MESES_CORTO = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 const _fmtWeekLabel = w => {
-  // w = '2026-04-27' → '27 abr'
+  // w = '2026-04-27' → 'abr 26' (mes año corto)
   const parts = w.split('-');
   if(parts.length < 3) return w;
   const [Y, M, D] = parts;
-  return parseInt(D) + ' ' + _MESES_CORTO[parseInt(M)-1];
+  return _MESES_CORTO[parseInt(M)-1] + ' ' + Y.slice(2);
+};
+// Helper for tabla weekly (sigue mostrando día completo)
+const _fmtWeekFull = w => {
+  const parts = w.split('-');
+  if(parts.length < 3) return w;
+  const [Y, M, D] = parts;
+  return parseInt(D) + '/' + String(parseInt(M)).padStart(2,'0') + '/' + Y;
 };
 const WL = WEEKS.map(_fmtWeekLabel);
 const LS = {"bernardo.contreras@rappi.com": "Bernardo Contreras", "gdelarosa@rappi.com": "G. De la Rosa", "raquel.acosta@rappi.com": "Raquel Acosta"};
@@ -1447,11 +1454,20 @@ function renderBrandDetail(){
       });
     }
     const label=_selectedBrands.length===1?_selectedBrands[0]:`${_selectedBrands.length} marcas combinadas`;
-    mkChart('bc_'+k,'line',chartLabels,[{
-      label, data:combined, borderColor:c,
-      backgroundColor:c+'22', fill:_selectedBrands.length>1,
-      borderWidth:2, pointRadius:0, tension:.3
-    }]);
+    const isBarMetric = (k==='ventas'||k==='ordenes');
+    if(isBarMetric){
+      mkChart('bc_'+k,'bar',chartLabels,[{
+        label, data:combined,
+        backgroundColor:c+'D9',borderColor:c,borderWidth:0,
+        borderRadius:3,maxBarThickness:14
+      }]);
+    } else {
+      mkChart('bc_'+k,'line',chartLabels,[{
+        label, data:combined, borderColor:c,
+        backgroundColor:c+'22', fill:_selectedBrands.length>1,
+        borderWidth:2, pointRadius:0, tension:.3
+      }]);
+    }
   });
 
   // === LW KPI Table ===
@@ -1479,94 +1495,117 @@ function renderBrandDetail(){
     lwDiv.innerHTML=html;
   }
 
-  // === Weekly breakdown table (estilo Aleph) ===
+  // === Weekly breakdown table (estilo Aleph) — soporta multi-brand ===
   const wtDiv = document.getElementById('brandWeeklyTable');
-  if(wtDiv && _selectedBrands.length === 1){
-    const bn = _selectedBrands[0];
-    const bd = DATA.brand_data[bn];
-    if(bd && bd.ventas && bd.ventas.length >= 2){
-      const aw = DATA.all_weeks;
-      const N_SHOW = 10;  // últimas 10 semanas
-      const start = Math.max(0, bd.ventas.length - N_SHOW);
-      const wkLabels = aw.slice(aw.length - bd.ventas.length + start);
-      const meses = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
-      const fmtW = w => {
-        const [Y,M,D] = w.split('-');
-        return parseInt(D)+'/'+ String(parseInt(M)).padStart(2,'0') + '/' + Y;
-      };
-      const rows = [];
-      for(let i = bd.ventas.length - 1; i >= start; i--){
-        const idx = i;
-        const v = bd.ventas[idx] || 0;
-        const o = bd.ordenes[idx] || 0;
-        const aov = o > 0 ? v/o : 0;
-        const mkd = (bd.pct_markdown_ally && bd.pct_markdown_ally[idx]) || 0;
-        const v_prev = idx > 0 ? (bd.ventas[idx-1] || 0) : 0;
-        const o_prev = idx > 0 ? (bd.ordenes[idx-1] || 0) : 0;
-        const aov_prev = o_prev > 0 ? v_prev/o_prev : 0;
-        const mkd_prev = idx > 0 ? ((bd.pct_markdown_ally && bd.pct_markdown_ally[idx-1]) || 0) : 0;
-        const dV = v - v_prev;
-        const dVp = v_prev > 0 ? (v-v_prev)/v_prev*100 : null;
-        const dO = o - o_prev;
-        const dOp = o_prev > 0 ? (o-o_prev)/o_prev*100 : null;
-        const dA = aov - aov_prev;
-        const dAp = aov_prev > 0 ? (aov-aov_prev)/aov_prev*100 : null;
-        const dMpp = mkd - mkd_prev;
-        rows.push({week: wkLabels[idx-start] || aw[Math.min(aw.length-1, idx+1)] || '', v, dV, dVp, o, dO, dOp, aov, dA, dAp, mkd, dMpp});
+  if(wtDiv && _selectedBrands.length >= 1){
+    // Aggregate brand_data arrays across selected brands
+    const valid = _selectedBrands.filter(b => DATA.brand_data[b] && DATA.brand_data[b].ventas);
+    if(valid.length > 0){
+      const sample = DATA.brand_data[valid[0]];
+      const len = sample.ventas.length;
+      if(len < 2){
+        wtDiv.innerHTML = '';
+      } else {
+        const aw = DATA.all_weeks;
+        const N_SHOW = 10;
+        const startIdx = Math.max(0, len - N_SHOW);
+        // Aggregate function: para sum metrics (ventas, ordenes) suma; para AOV recompute, para MKD weighted avg
+        const aggIdx = (idx) => {
+          let sv=0, so=0, smkd_abs=0;
+          for(const b of valid){
+            const bd = DATA.brand_data[b];
+            const v = (bd.ventas && bd.ventas[idx]) || 0;
+            const o = (bd.ordenes && bd.ordenes[idx]) || 0;
+            const m = (bd.pct_markdown_ally && bd.pct_markdown_ally[idx]) || 0;
+            sv += v; so += o;
+            smkd_abs += m * v / 100;
+          }
+          return {
+            v: sv, o: so,
+            aov: so > 0 ? sv/so : 0,
+            mkd: sv > 0 ? smkd_abs/sv*100 : 0
+          };
+        };
+        const wkLabels = aw.slice(aw.length - len + startIdx);
+        const fmtW = w => {
+          const parts = w.split('-');
+          if(parts.length < 3) return w;
+          const [Y,M,D] = parts;
+          return parseInt(D)+'/'+ String(parseInt(M)).padStart(2,'0') + '/' + Y;
+        };
+        const rows = [];
+        for(let i = len - 1; i >= startIdx; i--){
+          const cur = aggIdx(i);
+          const prev = i > 0 ? aggIdx(i-1) : {v:0, o:0, aov:0, mkd:0};
+          const dV = cur.v - prev.v;
+          const dVp = prev.v > 0 ? (cur.v-prev.v)/prev.v*100 : null;
+          const dO = cur.o - prev.o;
+          const dOp = prev.o > 0 ? (cur.o-prev.o)/prev.o*100 : null;
+          const dAp = prev.aov > 0 ? (cur.aov-prev.aov)/prev.aov*100 : null;
+          const dMpp = cur.mkd - prev.mkd;
+          rows.push({
+            week: wkLabels[i-startIdx] || aw[Math.min(aw.length-1, i+1)] || '',
+            v: cur.v, dV, dVp,
+            o: cur.o, dO, dOp,
+            aov: cur.aov, dAp,
+            mkd: cur.mkd, dMpp
+          });
+        }
+        const fM = v => '$' + Math.round(Math.abs(v)).toLocaleString('en-US');
+        const fN = v => Math.round(Math.abs(v)).toLocaleString('en-US');
+        const colorBg = (sign) => sign > 0 ? '#DCFCE7' : (sign < 0 ? '#FEE2E2' : '#F9FAFB');
+        const colorTxt = (sign) => sign > 0 ? '#166534' : (sign < 0 ? '#991B1B' : '#6B7280');
+        const cellD = (val, sign, isMoney) => {
+          const bg = colorBg(sign), c = colorTxt(sign);
+          const prefix = sign > 0 ? '+' : (sign < 0 ? '-' : '');
+          const f = isMoney ? fM(val) : fN(val);
+          return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+(val===0?'—':prefix+f)+'</td>';
+        };
+        const cellP = (pct, isPp) => {
+          if(pct == null) return '<td style="padding:5px 8px;background:#F9FAFB;color:#9CA3AF;text-align:right;font-size:11px">—</td>';
+          const bg = colorBg(pct), c = colorTxt(pct);
+          const suf = isPp ? 'pp' : '%';
+          const prefix = pct >= 0 ? '+' : '';
+          return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+prefix+pct.toFixed(2)+suf+'</td>';
+        };
+        const title = valid.length === 1 ? valid[0] : valid.length + ' marcas combinadas';
+        let html = '<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📋 Desglose semanal · '+title+' (últimas '+N_SHOW+' semanas)</div>';
+        html += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+
+          '<th style="padding:6px 8px;text-align:left;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Week</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas Δ$</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas Δ%</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órdenes</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órd Δ</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órd Δ%</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">AOV</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">AOV Δ%</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">MKD Ally %</th>'+
+          '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">MKD Δ pp</th>'+
+          '</tr></thead><tbody>';
+        for(const r of rows){
+          html += '<tr style="border-bottom:1px solid #F3F4F6">'+
+            '<td style="padding:5px 8px;font-weight:700;color:#1A1A2E;font-size:11px">'+fmtW(r.week)+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+fM(r.v)+'</td>'+
+            cellD(r.dV, r.dV, true)+
+            cellP(r.dVp)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+fN(r.o)+'</td>'+
+            cellD(r.dO, r.dO, false)+
+            cellP(r.dOp)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+r.aov.toFixed(1)+'</td>'+
+            cellP(r.dAp)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+r.mkd.toFixed(2)+'%</td>'+
+            cellP(r.dMpp, true)+
+            '</tr>';
+        }
+        html += '</tbody></table></div>';
+        wtDiv.innerHTML = html;
       }
-      const fM = v => '$' + Math.round(Math.abs(v)).toLocaleString('en-US');
-      const fN = v => Math.round(Math.abs(v)).toLocaleString('en-US');
-      const colorBg = (sign) => sign > 0 ? '#DCFCE7' : (sign < 0 ? '#FEE2E2' : '#F9FAFB');
-      const colorTxt = (sign) => sign > 0 ? '#166534' : (sign < 0 ? '#991B1B' : '#6B7280');
-      const cellD = (val, sign, isMoney) => {
-        const bg = colorBg(sign), c = colorTxt(sign);
-        const prefix = sign > 0 ? '+' : (sign < 0 ? '-' : '');
-        const f = isMoney ? fM(val) : fN(val);
-        return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+(val===0?'—':prefix+f)+'</td>';
-      };
-      const cellP = (pct, isPp) => {
-        if(pct == null) return '<td style="padding:5px 8px;background:#F9FAFB;color:#9CA3AF;text-align:right;font-size:11px">—</td>';
-        const bg = colorBg(pct), c = colorTxt(pct);
-        const suf = isPp ? 'pp' : '%';
-        const prefix = pct >= 0 ? '+' : '';
-        return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+prefix+pct.toFixed(2)+suf+'</td>';
-      };
-      let html = '<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📋 Desglose semanal · '+bn+' (últimas '+N_SHOW+' semanas)</div>';
-      html += '<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+
-        '<th style="padding:6px 8px;text-align:left;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px">Week</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas Δ$</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Ventas Δ%</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órdenes</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órd Δ</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">Órd Δ%</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">AOV</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">AOV Δ%</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">MKD Ally %</th>'+
-        '<th style="padding:6px 8px;text-align:right;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px">MKD Δ pp</th>'+
-        '</tr></thead><tbody>';
-      for(const r of rows){
-        html += '<tr style="border-bottom:1px solid #F3F4F6">'+
-          '<td style="padding:5px 8px;font-weight:700;color:#1A1A2E;font-size:11px">'+fmtW(r.week)+'</td>'+
-          '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+fM(r.v)+'</td>'+
-          cellD(r.dV, r.dV, true)+
-          cellP(r.dVp)+
-          '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+fN(r.o)+'</td>'+
-          cellD(r.dO, r.dO, false)+
-          cellP(r.dOp)+
-          '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+r.aov.toFixed(1)+'</td>'+
-          cellP(r.dAp)+
-          '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+r.mkd.toFixed(2)+'%</td>'+
-          cellP(r.dMpp, true)+
-          '</tr>';
-      }
-      html += '</tbody></table></div>';
-      wtDiv.innerHTML = html;
     } else {
       wtDiv.innerHTML = '';
     }
   } else if(wtDiv) {
-    wtDiv.innerHTML = '<div style="background:#FFF8F2;padding:10px 14px;border-radius:8px;font-size:11px;color:#9CA3AF">💡 Selecciona <strong>una sola marca</strong> para ver el desglose semanal con Δ$ y Δ% por KPI.</div>';
+    wtDiv.innerHTML = '<div style="background:#FFF8F2;padding:10px 14px;border-radius:8px;font-size:11px;color:#9CA3AF">💡 Selecciona al menos una marca para ver el desglose semanal con Δ$ y Δ% por KPI.</div>';
   }
 }
 function goBrand(brand){
@@ -1713,6 +1752,7 @@ function renderTendencias(){
       :WL;
     TMETRICS.forEach(([k,lbl,c])=>{
       const cid='tend_s_'+k;
+      const isBarMetric = (k==='ventas'||k==='ordenes');
       const datasets=kamsToShow.map(({lider:l,kam,color})=>{
         let data=[];
         if(isMensual){
@@ -1721,10 +1761,15 @@ function renderTendencias(){
         } else {
           data=DATA.kam_trends[l]?.[kam]?.[k]||[];
         }
+        if(isBarMetric){
+          return{label:kam,data,
+            backgroundColor:color+'D9',borderColor:color,borderWidth:0,
+            borderRadius:3,maxBarThickness:14};
+        }
         return{label:kam,data,borderColor:color,backgroundColor:'transparent',
           borderWidth:kamsToShow.length===1?2:1.5,pointRadius:0,tension:.3};
       });
-      mkChart(cid,'line',labels,datasets);
+      mkChart(cid, isBarMetric?'bar':'line', labels, datasets);
     });
   },50);
 
@@ -3960,7 +4005,7 @@ function cbToggle(){
   const p = document.getElementById('cbPanel');
   p.classList.toggle('open');
   if(p.classList.contains('open') && document.getElementById('cbMessages').children.length===0){
-    cbBot('¡Hola Raquel! 👋 Soy tu asistente del dashboard. Pregúntame sobre las marcas — qué cayó, qué creció, qué KAM tiene más caída, qué pasa con el tráfico o conversión.<br><br>💡 Tip: puedes mencionar nombres de marcas o KAMs específicos.');
+    cbBot('¡Hola! 👋 Soy el asistente del dashboard. Pregúntame sobre tu cartera, marcas o KAMs.<br><br>💡 Ejemplos:<br>• "WoW Sushi Roll" → semana vs semana de esa marca<br>• "YTD Hooters" → YTD vs same-period 2025<br>• "Top marcas que más cayeron WoW"<br>• "Top marcas que más cayeron YTD"<br>• "Resumen general"');
     cbRenderSuggestions();
   }
 }
@@ -3984,11 +4029,11 @@ function cbAsk(s){
 }
 function cbRenderSuggestions(){
   const sugg = [
-    '¿Qué marcas cayeron más?',
     'Resumen WoW',
     'Resumen YTD',
+    'Top marcas que más cayeron WoW',
+    'Top marcas que más cayeron YTD',
     '¿Cae por tráfico o conversión?',
-    '¿Qué KAM tiene más caída?',
     '¿Cómo va Sushi Roll?',
     'Resumen general'
   ];
@@ -4036,6 +4081,15 @@ function cbAnswer(q){
   const isUp = /crec|crece|sube|alza|mejor|arriba|gana|posit|crecimiento/.test(ql);
 
   if(/resumen|overview|general|panorama/.test(ql)){ return cbResumen(); }
+  // WoW/YTD del brand específico
+  if(brandHit && /\bwow\b|semana.?vs.?semana|lw.?vs.?pw/i.test(ql)) return cbBrandWoW(brandHit);
+  if(brandHit && /\bytd\b|year.?to.?date|acumulado/i.test(ql)) return cbBrandYTD(brandHit);
+  // "Top marcas que más cayeron WoW/YTD"
+  if(/top.*(cay|caida|baj).*wow|wow.*cay|wow.*caida|wow.*peor/i.test(ql)) return cbTopWoW('down');
+  if(/top.*(cay|caida|baj).*ytd|ytd.*cay|ytd.*caida|ytd.*peor/i.test(ql)) return cbTopYTD('down');
+  if(/top.*(crec|sub|gana).*wow|wow.*crec|wow.*mejor/i.test(ql)) return cbTopWoW('up');
+  if(/top.*(crec|sub|gana).*ytd|ytd.*crec|ytd.*mejor/i.test(ql)) return cbTopYTD('up');
+  // Drill normal por brand/kam
   if(brandHit){ return cbBrandDrilldown(brandHit); }
   if(kamHit){ return cbKamDrilldown(kamHit); }
 
@@ -4109,6 +4163,85 @@ function cbWoW(){
     for(const x of topDown) html += '<li>'+x.marca+' ('+x.kam+'): '+fM(x.nom)+' '+fmtPct(x.pct)+'</li>';
     html += '</ul>';
   }
+  cbBot(html);
+}
+
+// === WoW de una marca específica ===
+function cbBrandWoW(brandName){
+  const cb = DATA.callout_brands.find(x => x.marca === brandName);
+  if(!cb){ cbBot('No encontré la marca '+brandName); return; }
+  const bd = DATA.brand_data[brandName] || {};
+  const _last = arr => (arr && arr.length ? arr[arr.length-1] : 0);
+  const _prev = arr => (arr && arr.length >= 2 ? arr[arr.length-2] : 0);
+  const v_lw = _last(bd.ventas), v_pw = _prev(bd.ventas);
+  const o_lw = _last(bd.ordenes), o_pw = _prev(bd.ordenes);
+  const t_lw = _last(bd.trafico_ss), t_pw = _prev(bd.trafico_ss);
+  const cvr_lw = _last(bd.cvr_pct), cvr_pw = _prev(bd.cvr_pct);
+  const aov_lw = _last(bd.aov), aov_pw = _prev(bd.aov);
+  const mkd_lw = _last(bd.pct_markdown_ally), mkd_pw = _prev(bd.pct_markdown_ally);
+  const r_lw = _last(bd.revenue_ads), r_pw = _prev(bd.revenue_ads);
+  const b_lw = _last(bd.bookings_ads), b_pw = _prev(bd.bookings_ads);
+  const pct = (a,b) => b > 0 ? (a-b)/b*100 : null;
+  let html = '<strong>📊 '+brandName+' · WoW (LW '+(DATA.last_week_str||'')+' vs PW '+(DATA.prev_week_str||'')+')</strong><br>';
+  html += 'KAM: '+cb.kam+'<br><br><ul>';
+  html += '<li>Ventas: '+fM(v_lw)+' '+fmtPct(pct(v_lw,v_pw))+' vs '+fM(v_pw)+'</li>';
+  html += '<li>Órdenes: '+(o_lw||0).toLocaleString()+' '+fmtPct(pct(o_lw,o_pw))+'</li>';
+  html += '<li>Tráfico SS: '+(t_lw||0).toLocaleString()+' '+fmtPct(pct(t_lw,t_pw))+'</li>';
+  html += '<li>CVR: '+(cvr_lw||0).toFixed(2)+'% '+fmtPct(cvr_lw-cvr_pw,true)+'</li>';
+  html += '<li>AOV: $'+(aov_lw||0).toFixed(2)+' '+fmtPct(pct(aov_lw,aov_pw))+'</li>';
+  html += '<li>MKD Ally: '+(mkd_lw||0).toFixed(2)+'% '+fmtPct(mkd_lw-mkd_pw,true)+'</li>';
+  html += '<li>Bookings: '+fK(b_lw)+' '+fmtPct(pct(b_lw,b_pw))+'</li>';
+  html += '<li>Revenue: '+fK(r_lw)+' '+fmtPct(pct(r_lw,r_pw))+'</li>';
+  html += '</ul>';
+  cbBot(html);
+}
+
+// === YTD de una marca específica ===
+function cbBrandYTD(brandName){
+  const cb = DATA.callout_brands.find(x => x.marca === brandName);
+  if(!cb){ cbBot('No encontré la marca '+brandName); return; }
+  let html = '<strong>📆 '+brandName+' · YTD 2026 vs mismo periodo 2025</strong><br>';
+  html += 'KAM: '+cb.kam+'<br><br><ul>';
+  html += '<li>GMV: '+fM(cb.gmv_ytd_26||0)+' '+fmtPct(cb.delta_ytd)+' vs '+fM(cb.gmv_ytd_25||0)+'</li>';
+  html += '<li>Órdenes: '+(cb.ord_26||0).toLocaleString()+' '+fmtPct(cb.delta_ord)+' vs '+(cb.ord_25||0).toLocaleString()+'</li>';
+  html += '<li>Tráfico: '+(cb.traf_26||0).toLocaleString()+' '+fmtPct(cb.delta_traf)+'</li>';
+  html += '<li>CVR: '+(cb.cvr_26||0).toFixed(2)+'% '+fmtPct(cb.delta_cvr_pp,true)+'</li>';
+  html += '<li>AOV: $'+(cb.aov_26||0).toFixed(2)+' '+fmtPct(cb.delta_aov)+'</li>';
+  html += '<li>MKD Ally: '+(cb.mkd_26||0).toFixed(2)+'% '+fmtPct(cb.delta_mkd_pp,true)+'</li>';
+  html += '<li>Revenue Ads: '+fK(cb.rev_26||0)+' '+fmtPct(cb.delta_rev)+'</li>';
+  html += '<li>Weeks activas: '+(cb.wks_26||0)+' (vs '+(cb.wks_25||0)+' en 2025)</li>';
+  html += '</ul>';
+  cbBot(html);
+}
+
+// === Top WoW (que más caen / crecen en delta GMV absoluto) ===
+function cbTopWoW(dir){
+  const arr = DATA.callout_brands.filter(c => c.gmv_lw != null && c.gmv_pw != null && c.gmv_pw > 0).map(c => ({
+    marca: c.marca, kam: c.kam, nom: c.gmv_lw - c.gmv_pw, pct: (c.gmv_lw-c.gmv_pw)/c.gmv_pw*100,
+    lw: c.gmv_lw, pw: c.gmv_pw
+  }));
+  const sorted = dir === 'down' ? arr.filter(x=>x.nom<0).sort((a,b)=>a.nom-b.nom) : arr.filter(x=>x.nom>0).sort((a,b)=>b.nom-a.nom);
+  const top = sorted.slice(0,10);
+  const titulo = dir === 'down' ? 'Top 10 marcas que más cayeron WoW' : 'Top 10 marcas que más crecieron WoW';
+  let html = '<strong>'+titulo+'</strong> (sem '+(DATA.last_week_str||'')+' vs '+(DATA.prev_week_str||'')+')<ul>';
+  for(const x of top){
+    html += '<li><strong>'+x.marca+'</strong> ('+x.kam+'): '+(x.nom>=0?'+':'')+fM(x.nom)+' '+fmtPct(x.pct)+'</li>';
+  }
+  html += '</ul>';
+  cbBot(html);
+}
+
+// === Top YTD (que más caen / crecen) ===
+function cbTopYTD(dir){
+  const arr = DATA.callout_brands.filter(c => c.delta_ytd != null && c.gmv_ytd_25 > 1000);
+  const sorted = dir === 'down' ? arr.sort((a,b)=>a.delta_ytd-b.delta_ytd) : arr.sort((a,b)=>b.delta_ytd-a.delta_ytd);
+  const top = sorted.slice(0,10);
+  const titulo = dir === 'down' ? 'Top 10 marcas que más cayeron YTD' : 'Top 10 marcas que más crecieron YTD';
+  let html = '<strong>'+titulo+'</strong> (vs mismo periodo 2025)<ul>';
+  for(const c of top){
+    html += '<li><strong>'+c.marca+'</strong> ('+c.kam+'): '+fmtPct(c.delta_ytd)+' · '+fM(c.gmv_ytd_26)+' vs '+fM(c.gmv_ytd_25)+'</li>';
+  }
+  html += '</ul>';
   cbBot(html);
 }
 

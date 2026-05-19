@@ -651,7 +651,8 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     <span style="font-size:11px;color:#9CA3AF">Fuente: SWAT_Brands.html — 7 marcas, periodo Mayo 2026</span>
   </div>
   <div style="border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#fff">
-    <iframe id="swatFrame" src="SWAT_Brands.html" style="width:100%;height:1200px;border:0;display:block" loading="lazy"></iframe>
+    <iframe id="swatFrame" src="about:blank" data-src="SWAT_Brands.html" style="width:100%;height:1200px;border:0;display:block"></iframe>
+    <div id="swatFallback" style="padding:16px;font-size:12px;color:#9CA3AF;display:none">Si el iframe no carga, <a href="SWAT_Brands.html" target="_blank" style="color:#3B82F6">abre el archivo en una pestaña nueva</a>.</div>
   </div>
 </div>
 
@@ -974,6 +975,14 @@ function showTab(id,btn){
   if(id==='alertas_mes') initAlertasMes();
   if(id==='kam_reports') initKamReportes();
   if(id==='zoom_mes') initZoomMes();
+  if(id==='swat'){
+    const fr=document.getElementById('swatFrame');
+    if(fr && fr.getAttribute('src')!==fr.getAttribute('data-src')){
+      fr.setAttribute('src', fr.getAttribute('data-src'));
+    }
+    const fb=document.getElementById('swatFallback');
+    if(fb){ fb.style.display='block'; setTimeout(()=>{fb.style.display='none';},5000); }
+  }
 }
 
 // ── FILTERS ────────────────────────────────────────────────────────
@@ -3399,21 +3408,26 @@ async function initCaidas(){
   if(wlabel) wlabel.textContent='LW: '+DATA.last_week_str+' vs PW: '+DATA.prev_week_str;
   if(wrap) wrap.innerHTML='<p style="color:#6B7280;padding:16px;font-size:13px">⏳ Cargando datos sincronizados...</p>';
   fbSyncIndicator('caidasSyncStatus','⏳ Conectando...','#F59E0B');
-  await fbLoad();
-  fbSyncIndicator('caidasSyncStatus','☁ Sincronizado','#059669');
+  try{
+    await fbLoad();
+    fbSyncIndicator('caidasSyncStatus','☁ Sincronizado','#059669');
+  }catch(e){
+    fbSyncIndicator('caidasSyncStatus','⚠ Sin Firebase (modo local)','#F59E0B');
+    console.warn('fbLoad failed, rendering with local data only:', e);
+  }
 
   // Populate Líder dropdown (once)
   const liderSel=document.getElementById('caidasLiderSel');
-  if(liderSel.getAttribute('data-loaded')!=='1'){
+  if(liderSel&&liderSel.getAttribute('data-loaded')!=='1'){
     const lideres=[...new Set(DATA.kam_rows.map(r=>r.lider))].sort();
     lideres.forEach(l=>{
       const o=document.createElement('option');
-      o.value=l; o.textContent=LS[l]||l.split('@')[0]; liderSel.appendChild(o);
+      o.value=l; o.textContent=(typeof LS!=='undefined'&&LS[l])||l.split('@')[0]; liderSel.appendChild(o);
     });
     liderSel.setAttribute('data-loaded','1');
   }
   // Populate KAM dropdown filtered by current Líder
-  _populateCaidasKams();
+  if(typeof _populateCaidasKams==='function') _populateCaidasKams();
   renderCaidasTable();
 }
 

@@ -214,10 +214,10 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     }
   }
 
-  // Try existing session first
+  // Try existing session first — defer until all scripts have loaded
   const existing = getSession();
   if(existing){
-    unlock(existing.email);
+    window.addEventListener('load', function(){ unlock(existing.email); });
     return;
   }
 
@@ -645,15 +645,8 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 </div>
 
 <div id="tab-swat" class="tab-content">
-  <h2 style="margin-bottom:12px;font-size:18px;font-weight:700;color:#1F2937">🎯 SWAT Brands — Dashboard Mayo 2026</h2>
-  <p style="font-size:13px;color:#6B7280;margin-bottom:14px">Seguimiento detallado de marcas SWAT (Tabla General, Tierra Garat, Cancino, Lucky Sushi, Sushi Shop Teikit, Hooters, Maison Kayser). Vista embebida del dashboard SWAT Brands.</p>
-  <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
-    <a href="SWAT_Brands.html" target="_blank" style="background:#C17B3F;color:#fff;text-decoration:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:600">↗ Abrir en pestaña nueva</a>
-    <span style="font-size:11px;color:#9CA3AF">Fuente: SWAT_Brands.html — 7 marcas, periodo Mayo 2026</span>
-  </div>
-  <div style="border:1px solid #E5E7EB;border-radius:10px;overflow:hidden;background:#fff">
-    <iframe id="swatFrame" src="about:blank" data-src="SWAT_Brands.html" style="width:100%;height:1200px;border:0;display:block"></iframe>
-    <div id="swatFallback" style="padding:16px;font-size:12px;color:#9CA3AF;display:none">Si el iframe no carga, <a href="SWAT_Brands.html" target="_blank" style="color:#3B82F6">abre el archivo en una pestaña nueva</a>.</div>
+  <div id="swat-dashboard" style="min-height:200px">
+    <div style="text-align:center;padding:48px;color:#9CA3AF;font-size:13px">Clic en 🎯 SWAT para cargar datos...</div>
   </div>
 </div>
 
@@ -908,7 +901,7 @@ let DATA = {};
 //  Sheet ID: 1NTSpUkY8Y7_Uod6o8HLEiAwAIivfwhxCZk3wJuU79tY
 // ═══════════════════════════════════════════════════════════════════
 const _SHEET_ID  = '1NTSpUkY8Y7_Uod6o8HLEiAwAIivfwhxCZk3wJuU79tY';
-const _SHEET_TAB = 'weekly';   // ← tab generado por Aleph con query MAESTRA
+const _SHEET_TAB = 'data_semanal';   // ← tab con datos semanales en Google Sheets
 
 function _parseCSV(text) {
   const rows = [];
@@ -946,15 +939,29 @@ async function _buildDataFromSheet() {
   try { const res = await fetch(url); text = await res.text(); }
   catch(e) { throw new Error('No se pudo conectar con Google Sheets: ' + e.message); }
   if (!text || text.length < 50 || text.trim().startsWith('<'))
-    throw new Error('El tab "weekly" no está publicado o no existe. Ve a Archivo → Compartir → Publicar en la web → selecciona "weekly" → CSV → Publicar.');
+    throw new Error(`El tab "${_SHEET_TAB}" no está publicado o no existe. Ve a Archivo → Compartir → Publicar en la web → selecciona "${_SHEET_TAB}" → CSV → Publicar.`);
 
-  const EXCL_KAMS   = ['edgar cano', 'luis peimbert'];
+  // El export de Aleph tiene metadata en fila 1 (no headers de columna).
+  // Saltamos esa fila e inyectamos los headers esperados por el código
+  // en el orden exacto del SELECT de la query maestra.
+  const csvLines = text.split('\n');
+  csvLines.shift(); // eliminar fila 1 (metadata Aleph)
+  // Columnas exactas del SELECT en DATA_RESTAURANT (actualizado May 2026):
+  // 0=idx, 1=WEEK_DATE, 2=LIDER, 3=KAM, 4=BRAND_ID, 5=MARCA,
+  // 6=VENTAS, 7=BOOKINGS_ADS, 8=REVENUE_ADS, 9=ORDENES, 10=TRAFICO_SS,
+  // 11=CANCELS, 12=MARKDOWN(raw MXN), 13=MKD_PRO(raw MXN),
+  // 14=AOV, 15=CVR_PCT, 16=PCT_CANCELACIONES,
+  // 17=PCT_MARKDOWN_ALLY, 18=PCT_MARKDOWN_PRO_ALLY
+  csvLines.unshift(',WEEK_DATE,LIDER,KAM,BRAND_ID,MARCA,VENTAS,BOOKINGS_ADS,REVENUE_ADS,ORDENES,TRAFICO_SS,CANCELS,MARKDOWN_RAW,MKD_PRO_RAW,AOV,CVR_PCT,PCT_CANCELACIONES,PCT_MARKDOWN_ALLY,PCT_MARKDOWN_PRO_ALLY');
+  text = csvLines.join('\n');
+
+  const EXCL_KAMS   = ['edgar cano', 'luis peimbert', 'edgar.cano@rappi.com', 'luis.peimbert@rappi.com'];
   const EXCL_BRANDS = ['Koku', 'Koku - Turbo', 'Mi Compa Chava', 'Aaaah Carbon', 'Dairy Queen Turbo'];
   const rows = _parseCSV(text).filter(r =>
     !EXCL_KAMS.includes((r.KAM||'').trim().toLowerCase()) &&
     !EXCL_BRANDS.includes((r.MARCA||'').trim())
   );
-  if (!rows.length) throw new Error('Sin filas en el tab "weekly" después de filtros.');
+  if (!rows.length) throw new Error(`Sin filas en el tab "${_SHEET_TAB}" después de filtros.`);
 
   // all_weeks: closed weeks sorted (WEEK_DATE col, already YYYY-MM-DD text)
   const todayStr = new Date().toISOString().slice(0,10);
@@ -1051,15 +1058,40 @@ async function _buildDataFromSheet() {
   // leaders & lider_weekly
   const leadersSet = new Set(rows.map(r=>(r.LIDER||'').toLowerCase()).filter(Boolean));
   const leaders = [...leadersSet].sort();
-  const _lv = {}, _lo = {};
-  leaders.forEach(l => { _lv[l] = new Array(N).fill(0); _lo[l] = new Array(N).fill(0); });
+  const _lw = {};
+  leaders.forEach(l => { _lw[l] = {
+    ventas:new Array(N).fill(0), ordenes:new Array(N).fill(0),
+    trafico:new Array(N).fill(0), bookings:new Array(N).fill(0), revenue:new Array(N).fill(0),
+    _wv:new Array(N).fill(0), _wc_ord:new Array(N).fill(0), _wd_ord:new Array(N).fill(0),
+    _wma:new Array(N).fill(0), _wmp:new Array(N).fill(0)
+  }; });
   rows.forEach(r => {
     const l=(r.LIDER||'').toLowerCase(), wi=wIdx[r.WEEK_DATE];
-    if(wi===undefined||!_lv[l]) return;
-    _lv[l][wi]+=+r.VENTAS||0; _lo[l][wi]+=+r.ORDENES||0;
+    if(wi===undefined||!_lw[l]) return;
+    const d=_lw[l], v=+r.VENTAS||0, o=+r.ORDENES||0;
+    d.ventas[wi]+=v; d.ordenes[wi]+=o;
+    d.trafico[wi]+=+r.TRAFICO_SS||0;
+    d.bookings[wi]+=+r.BOOKINGS_ADS||0;
+    d.revenue[wi]+=+r.REVENUE_ADS||0;
+    d._wv[wi]+=v;
+    d._wc_ord[wi]+=(+r.PCT_CANCELACIONES||0)*o/100;
+    d._wd_ord[wi]+=(+r.PCT_DEFECTOS||0)*o/100;
+    d._wma[wi]+=(+r.PCT_MARKDOWN_ALLY||0)*v/100;
+    d._wmp[wi]+=(+r.PCT_MARKDOWN_PRO_ALLY||0)*v/100;
   });
   const lider_weekly = {};
-  leaders.forEach(l => { lider_weekly[l] = { ventas: _lv[l], ordenes: _lo[l] }; });
+  leaders.forEach(l => {
+    const d=_lw[l];
+    lider_weekly[l] = {
+      ventas:d.ventas, ordenes:d.ordenes,
+      trafico:d.trafico, bookings:d.bookings, revenue:d.revenue,
+      cvr:d.trafico.map((t,i)=>t>0?d.ordenes[i]/t*100:0),
+      cancel:d.ordenes.map((o,i)=>o>0?d._wc_ord[i]/o*100:0),
+      defecto:d.ordenes.map((o,i)=>o>0?d._wd_ord[i]/o*100:0),
+      mkd_ally:d._wv.map((v,i)=>v>0?d._wma[i]/v*100:0),
+      mkd_pro:d._wv.map((v,i)=>v>0?d._wmp[i]/v*100:0)
+    };
+  });
 
   // lider_data
   const lider_data = {};
@@ -1086,8 +1118,32 @@ async function _buildDataFromSheet() {
   rows.forEach(r => {
     const l=(r.LIDER||'').toLowerCase(), k=(r.KAM||'').trim(), wi=wIdx[r.WEEK_DATE];
     if(wi===undefined||!kam_trends[l]) return;
-    if(!kam_trends[l][k]) kam_trends[l][k] = { ventas:new Array(N).fill(0), ordenes:new Array(N).fill(0) };
-    kam_trends[l][k].ventas[wi]+=+r.VENTAS||0; kam_trends[l][k].ordenes[wi]+=+r.ORDENES||0;
+    if(!kam_trends[l][k]) kam_trends[l][k] = {
+      ventas:new Array(N).fill(0), ordenes:new Array(N).fill(0),
+      trafico:new Array(N).fill(0), bookings:new Array(N).fill(0), revenue:new Array(N).fill(0),
+      _wv:new Array(N).fill(0), _wc_ord:new Array(N).fill(0), _wd_ord:new Array(N).fill(0),
+      _wma:new Array(N).fill(0), _wmp:new Array(N).fill(0)
+    };
+    const kd=kam_trends[l][k], v=+r.VENTAS||0, o=+r.ORDENES||0;
+    kd.ventas[wi]+=v; kd.ordenes[wi]+=o;
+    kd.trafico[wi]+=+r.TRAFICO_SS||0;
+    kd.bookings[wi]+=+r.BOOKINGS_ADS||0;
+    kd.revenue[wi]+=+r.REVENUE_ADS||0;
+    kd._wv[wi]+=v;
+    kd._wc_ord[wi]+=(+r.PCT_CANCELACIONES||0)*o/100;
+    kd._wd_ord[wi]+=(+r.PCT_DEFECTOS||0)*o/100;
+    kd._wma[wi]+=(+r.PCT_MARKDOWN_ALLY||0)*v/100;
+    kd._wmp[wi]+=(+r.PCT_MARKDOWN_PRO_ALLY||0)*v/100;
+  });
+  // Compute derived KAM metrics
+  Object.values(kam_trends).forEach(lt => {
+    Object.values(lt).forEach(kd => {
+      kd.cvr       = kd.trafico.map((t,i)=>t>0?kd.ordenes[i]/t*100:0);
+      kd.pct_cancel= kd.ordenes.map((o,i)=>o>0?kd._wc_ord[i]/o*100:0);
+      kd.pct_defecto=kd.ordenes.map((o,i)=>o>0?kd._wd_ord[i]/o*100:0);
+      kd.mkd_ally  = kd._wv.map((v,i)=>v>0?kd._wma[i]/v*100:0);
+      kd.mkd_pro   = kd._wv.map((v,i)=>v>0?kd._wmp[i]/v*100:0);
+    });
   });
 
   // callout_brands (YTD 2025 vs 2026 same-period)
@@ -1119,7 +1175,7 @@ async function _buildDataFromSheet() {
     const r26=sliceAgg(brand,w26), r25=sliceAgg(brand,w25);
     const r4=sliceAgg(brand,l4w),  rp4=sliceAgg(brand,p4w);
     return {
-      marca:brand, lider:meta.lider, kam:meta.kam_email,
+      marca:brand, lider:meta.lider, kam:meta.kam,
       gmv_lw:lw_v, gmv_pw:pw_v, delta_lw:pct(lw_v,pw_v),
       gmv_l4w:r4.gmv, gmv_p4w:rp4.gmv, delta_l4w:pct(r4.gmv,rp4.gmv),
       gmv_ytd_26:r26.gmv, gmv_ytd_25:r25.gmv, delta_ytd:pct(r26.gmv,r25.gmv),
@@ -1159,13 +1215,103 @@ async function _buildDataFromSheet() {
     { icon:'📊', level:'info', title:`Datos en vivo · Google Sheets · Aleph actualiza cada lunes 9am`, body:'' },
   ];
 
+  // ── MOMENTOS DE CONSUMO ─────────────────────────────────────────────
+  // Tabs: data_momentos (brand×daypart) y data_momentos_prods (producto×daypart)
+  // Si el tab no existe aún, el error se silencia y la sección queda vacía.
+  const _MO_DAYPARTS = ['Madrugada','Desayuno','Comida','After Lunch','Cena'];
+  let momentos_order = [], momentos_pivot_data = [], momentos_global_data = {}, momentos_lideres_data = [];
+  let daypart_products_data = {};
+
+  try {
+    const moUrl = `https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=data_momentos&t=${Date.now()}`;
+    const moRes = await fetch(moUrl);
+    const moRaw = await moRes.text();
+
+    if (moRaw && moRaw.length > 50 && !moRaw.trim().startsWith('<')) {
+      const moLines = moRaw.split('\n');
+      moLines.shift(); // fila metadata Aleph
+      moLines.unshift(',BRAND_ID,MARCA,LIDER,KAM,DAYPART,ORDENES,GMV_USD');
+      const moRows = _parseCSV(moLines.join('\n')).filter(r => r.BRAND_ID && r.DAYPART);
+
+      const brandMap = {};
+      moRows.forEach(r => {
+        const bid = r.BRAND_ID;
+        if (!brandMap[bid]) {
+          brandMap[bid] = {brand_id:bid, marca:r.MARCA, lider:r.LIDER, kam:r.KAM, total:0, gmv_usd:0, dayparts:{}};
+          _MO_DAYPARTS.forEach(dp => brandMap[bid].dayparts[dp] = {ordenes:0, pct:0, gmv_usd:0});
+        }
+        const b = brandMap[bid];
+        const ord = parseInt(r.ORDENES)||0, gmv = parseFloat(r.GMV_USD)||0;
+        b.total += ord; b.gmv_usd += gmv;
+        if (b.dayparts[r.DAYPART]) { b.dayparts[r.DAYPART].ordenes = ord; b.dayparts[r.DAYPART].gmv_usd = gmv; }
+      });
+      momentos_pivot_data = Object.values(brandMap).map(b => {
+        _MO_DAYPARTS.forEach(dp => { b.dayparts[dp].pct = b.total > 0 ? b.dayparts[dp].ordenes / b.total * 100 : 0; });
+        return b;
+      });
+
+      // Agregado global
+      const gt = {total:0, gmv_usd:0, dayparts:{}};
+      _MO_DAYPARTS.forEach(dp => gt.dayparts[dp] = {ordenes:0, pct:0, gmv_usd:0});
+      momentos_pivot_data.forEach(b => {
+        gt.total += b.total; gt.gmv_usd += b.gmv_usd;
+        _MO_DAYPARTS.forEach(dp => { gt.dayparts[dp].ordenes += b.dayparts[dp].ordenes; gt.dayparts[dp].gmv_usd += b.dayparts[dp].gmv_usd; });
+      });
+      _MO_DAYPARTS.forEach(dp => { gt.dayparts[dp].pct = gt.total > 0 ? gt.dayparts[dp].ordenes / gt.total * 100 : 0; });
+      momentos_global_data = gt;
+
+      // Agregado por líder
+      const liderMap = {};
+      momentos_pivot_data.forEach(b => {
+        if (!liderMap[b.lider]) {
+          liderMap[b.lider] = {lider:b.lider, total:0, gmv_usd:0, dayparts:{}};
+          _MO_DAYPARTS.forEach(dp => liderMap[b.lider].dayparts[dp] = {ordenes:0, pct:0, gmv_usd:0});
+        }
+        const l = liderMap[b.lider];
+        l.total += b.total; l.gmv_usd += b.gmv_usd;
+        _MO_DAYPARTS.forEach(dp => { l.dayparts[dp].ordenes += b.dayparts[dp].ordenes; l.dayparts[dp].gmv_usd += b.dayparts[dp].gmv_usd; });
+      });
+      momentos_lideres_data = Object.values(liderMap).map(l => {
+        _MO_DAYPARTS.forEach(dp => { l.dayparts[dp].pct = l.total > 0 ? l.dayparts[dp].ordenes / l.total * 100 : 0; });
+        return l;
+      });
+
+      momentos_order = _MO_DAYPARTS;
+    }
+  } catch(e) { console.warn('[Momentos] Tab data_momentos no disponible:', e.message); }
+
+  try {
+    const mpUrl = `https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=data_momentos_prods&t=${Date.now()}`;
+    const mpRes = await fetch(mpUrl);
+    const mpRaw = await mpRes.text();
+
+    if (mpRaw && mpRaw.length > 50 && !mpRaw.trim().startsWith('<')) {
+      const mpLines = mpRaw.split('\n');
+      mpLines.shift(); // fila metadata Aleph
+      mpLines.unshift(',BRAND_ID,MARCA,LIDER,KAM,DAYPART,PRODUCT_NAME,ORDENES');
+      const mpRows = _parseCSV(mpLines.join('\n')).filter(r => r.BRAND_ID && r.DAYPART && r.PRODUCT_NAME);
+
+      _MO_DAYPARTS.forEach(dp => daypart_products_data[dp] = []);
+      mpRows.forEach(r => {
+        if (daypart_products_data[r.DAYPART]) {
+          daypart_products_data[r.DAYPART].push({
+            brand_id:r.BRAND_ID, marca:r.MARCA, lider:r.LIDER, kam:r.KAM,
+            product:r.PRODUCT_NAME, ordenes:parseInt(r.ORDENES)||0
+          });
+        }
+      });
+      _MO_DAYPARTS.forEach(dp => daypart_products_data[dp].sort((a,b) => b.ordenes - a.ordenes));
+    }
+  } catch(e) { console.warn('[Momentos] Tab data_momentos_prods no disponible:', e.message); }
+  // ── END MOMENTOS ──────────────────────────────────────────────────────
+
   return {
     last_week_str:fmtWStr(lastWeek), prev_week_str:fmtWStr(prevWeek), alert_week_str:fmtWStr(lastWeek),
     all_weeks, totals:{ventas:tv,ordenes:to,semanas:N,marcas:brand_list.length},
     lw_totals, pw_totals, weekly_global, lider_weekly, leaders, lider_data,
     kam_rows, kam_trends, alert_brands, insights, brand_list, brand_meta, brand_data, callout_brands,
-    daypart_brands:{}, daypart_products:{}, daypart_summary:{},
-    momentos_order:[], momentos_pivot:[], momentos_global:{}, momentos_lideres:[],
+    daypart_brands:{}, daypart_products:daypart_products_data, daypart_summary:{},
+    momentos_order:momentos_order, momentos_pivot:momentos_pivot_data, momentos_global:momentos_global_data, momentos_lideres:momentos_lideres_data,
   };
 }
 
@@ -1176,6 +1322,10 @@ async function _initFromSheets(email) {
     const newData = await _buildDataFromSheet();
     Object.assign(DATA, newData);
     WEEKS = DATA.all_weeks;
+    WL = WEEKS.map(_fmtWeekLabel);           // recompute after data loads
+    LEADERS = DATA.leaders;                   // recompute after data loads
+    MO = DATA.momentos_order || [];          // recompute momentos order after data loads
+    populateKamFilter();                      // populate KAM dropdown after data loads
     if (ov) ov.style.display = 'none';
     const firstBtn = document.querySelector('.tab.active') || document.querySelector('.tab');
     if (firstBtn) { const tid = firstBtn.getAttribute('onclick')?.match(/showTab\('(\w+)'/)?.[1]; if(tid) showTab(tid, firstBtn); }
@@ -1185,10 +1335,10 @@ async function _initFromSheets(email) {
       <div style="font-size:18px;font-weight:800;color:#1A1A2E;margin-bottom:8px">No se pudo cargar el Sheet</div>
       <div style="font-size:13px;color:#6B7280;margin-bottom:16px">${e.message}</div>
       <div style="font-size:12px;background:#FFF9DB;border:1px solid #F59E0B;padding:14px;border-radius:10px;text-align:left;margin-bottom:16px">
-        <strong>📋 Publicar el tab "weekly":</strong><br>
+        <strong>📋 Publicar el tab "data_semanal":</strong><br>
         1. Abre "Dashboard semanal" en Google Sheets<br>
         2. Archivo → Compartir → Publicar en la web<br>
-        3. Selecciona hoja: <strong>weekly</strong><br>
+        3. Selecciona hoja: <strong>data_semanal</strong><br>
         4. Formato: <strong>CSV</strong> → Publicar
       </div>
       <button onclick="location.reload()" style="padding:10px 24px;background:#FF441B;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700">🔄 Reintentar</button>
@@ -1212,10 +1362,10 @@ const _fmtWeekFull = w => {
   const [Y, M, D] = parts;
   return parseInt(D) + '/' + String(parseInt(M)).padStart(2,'0') + '/' + Y;
 };
-const WL = WEEKS.map(_fmtWeekLabel);
+let WL = [];   // populated after sheets load
 const LS = {"bernardo.contreras@rappi.com": "Bernardo Contreras", "gdelarosa@rappi.com": "G. De la Rosa", "raquel.acosta@rappi.com": "Raquel Acosta"};
 const LC = ["#FF441F", "#3B82F6", "#22C55E", "#F59E0B"];
-const LEADERS = DATA.leaders;
+let LEADERS;   // populated after sheets load
 
 // ── UTILS ──────────────────────────────────────────────────────────
 const fmtM=n=>{if(!n||isNaN(n))return'—';if(Math.abs(n)>=1e9)return(n/1e9).toFixed(1)+'B';if(Math.abs(n)>=1e6)return'$'+(n/1e6).toFixed(1)+'M';if(Math.abs(n)>=1e3)return'$'+(n/1e3).toFixed(1)+'K';return'$'+n.toFixed(0);};
@@ -1281,25 +1431,25 @@ function showTab(id,btn){
   if(id==='alertas_mes') initAlertasMes();
   if(id==='kam_reports') initKamReportes();
   if(id==='zoom_mes') initZoomMes();
-  if(id==='swat'){
-    const fr=document.getElementById('swatFrame');
-    if(fr && fr.getAttribute('src')!==fr.getAttribute('data-src')){
-      fr.setAttribute('src', fr.getAttribute('data-src'));
-    }
-    const fb=document.getElementById('swatFallback');
-    if(fb){ fb.style.display='block'; setTimeout(()=>{fb.style.display='none';},5000); }
-  }
+  if(id==='swat'){ renderSWAT(); }
 }
 
 // ── FILTERS ────────────────────────────────────────────────────────
 function onLiderChange(){ populateKamFilter(); applyFilters(); }
 function applyFilters(){ renderKamTable(); renderMarcas(); renderAlertas(); }
-function resetFilters(){ document.getElementById('filtLider').value=''; document.getElementById('filtKam').value=''; populateKamFilter(); applyFilters(); }
+function resetFilters(){
+  document.getElementById('filtLider').value=''; document.getElementById('filtKam').value='';
+  const tl=document.getElementById('tendLider'); if(tl) tl.value='';
+  const tk=document.getElementById('tendKam'); if(tk) tk.value='';
+  populateKamFilter(); applyFilters();
+  if(typeof populateTendKam==='function') populateTendKam();
+  if(typeof renderTendencias==='function') renderTendencias();
+}
 function populateKamFilter(){
   const lider=document.getElementById('filtLider').value;
   const sel=document.getElementById('filtKam'); const cur=sel.value;
   sel.innerHTML='<option value="">Todos los KAMs</option>';
-  [...new Set(DATA.kam_rows.filter(r=>!lider||r.lider===lider).map(r=>r.kam))].sort()
+  [...new Set((DATA.kam_rows||[]).filter(r=>!lider||r.lider===lider).map(r=>r.kam))].sort()
     .forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;if(k===cur)o.selected=true;sel.appendChild(o);});
 }
 
@@ -3089,12 +3239,10 @@ async function saveKamReport(kam,lider,week,idx){
   }
 }
 // ── INIT ───────────────────────────────────────────────────────────
-populateKamFilter();
-initResumen();
-initAlertas();
+// (estas funciones se llaman desde showTab() después de que _initFromSheets carga los datos)
 
 // ── MOMENTOS DE CONSUMO (redesign) ───────────────────────────────
-const MO = DATA.momentos_order;
+let MO = DATA.momentos_order || [];
 const MO_EMOJI = {'Madrugada':'🌙','Desayuno':'🌅','Comida':'🍽️','After Lunch':'☕','Cena':'🌆'};
 const MO_HOURS = {'Madrugada':'12am–6am','Desayuno':'7am–12pm','Comida':'12pm–4pm','After Lunch':'4pm–7pm','Cena':'7pm–12am'};
 // Gradient: 0% = #FFF, 50%+ = #FF441F
@@ -3184,7 +3332,7 @@ function renderMoGlobal(){
       <div class="mo-strip-emoji">${MO_EMOJI[m]}</div>
       <div class="mo-strip-name">${m}</div>
       <div class="mo-strip-hours">${MO_HOURS[m]}</div>
-      <div class="mo-strip-pct">${d.pct}%</div>
+      <div class="mo-strip-pct">${d.pct.toFixed(1)}%</div>
       <div class="mo-strip-sub">${fmtN(d.ordenes)} órdenes</div>
       <div class="mo-strip-bar-bg"><div class="mo-strip-bar" style="width:${barW}%"></div></div>
     </div>`;
@@ -3202,9 +3350,9 @@ function renderMoLideres(){
         <div class="mo-dp-label">${MO_EMOJI[m]} <span>${m}</span></div>
         <div class="mo-dp-bar-bg">
           <div class="mo-dp-bar-fill" style="width:${d.pct*2}%;max-width:100%;background:${color}"></div>
-          <span class="mo-dp-pct">${d.pct>5?d.pct+'%':''}</span>
+          <span class="mo-dp-pct">${d.pct>5?d.pct.toFixed(1)+'%':''}</span>
         </div>
-        <div class="mo-dp-count">${d.pct}% · ${fmtN(d.ordenes)}</div>
+        <div class="mo-dp-count">${d.pct.toFixed(1)}% · ${fmtN(d.ordenes)}</div>
       </div>`;
     }).join('');
     const widthPct = maxTotal>0? Math.round(l.total/maxTotal*100):0;
@@ -3296,7 +3444,7 @@ function renderMoPivot(){
       if(!d.ordenes) return `<td style="${cellStyle}"><span class="mo-heat" style="background:#F9FAFB;color:#D1D5DB">—</span></td>`;
       const bg=heatColor(d.pct), tc=heatTextColor(d.pct);
       const ordSub = isActive ? ('<br><small style="font-weight:400;font-size:9px">'+fmtN(d.ordenes)+'</small>') : '';
-      return '<td style="'+cellStyle+'"><span class="mo-heat" style="background:'+bg+';color:'+tc+'" title="'+fmtN(d.ordenes)+' órdenes">'+d.pct+'%'+ordSub+'</span></td>';
+      return '<td style="'+cellStyle+'"><span class="mo-heat" style="background:'+bg+';color:'+tc+'" title="'+fmtN(d.ordenes)+' órdenes">'+d.pct.toFixed(1)+'%'+ordSub+'</span></td>';
     }).join('');
     const sortVal = dpf ? (b.dayparts[dpf]&&b.dayparts[dpf].ordenes||0) : b.total;
     return `<tr>
@@ -5217,6 +5365,149 @@ function cbDriverAnalysis(){
 
 
 // ============================================================
+// ============================================================
+// SWAT BRANDS — Dashboard en vivo desde tab "swat" del Sheet
+// ============================================================
+async function renderSWAT(){
+  const container = document.getElementById('swat-dashboard');
+  if(!container || container.dataset.loaded==='1') return;
+  container.innerHTML='<div style="text-align:center;padding:48px;color:#6B7280;font-size:13px">⏳ Cargando datos SWAT...</div>';
+  try{
+    const url=`https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=swat&t=${Date.now()}`;
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error('No se pudo cargar el tab swat (status '+resp.status+')');
+    let text=await resp.text();
+    // Saltar fila metadata de Aleph, inyectar header con orden del SELECT
+    const lines=text.split('\n'); lines.shift();
+    lines.unshift(',BRAND_ID,BRAND,WEEK_DATE,YR,GMV,BOOKINGS,REVENUE,ORDERS,SST,CANCEL,MARKDOWN,MKD_PRO,AOV');
+    text=lines.join('\n');
+    const today=new Date().toISOString().slice(0,10);
+    const rows=_parseCSV(text).filter(r=>r.BRAND_ID && r.WEEK_DATE && r.WEEK_DATE<today);
+    if(!rows.length) throw new Error('Sin filas en el tab swat');
+
+    // Organizar por marca → semana → métricas
+    const bw={};
+    rows.forEach(r=>{
+      const b=r.BRAND||''; if(!b) return;
+      if(!bw[b]) bw[b]={};
+      bw[b][r.WEEK_DATE]={
+        gmv:+r.GMV||0, orders:+r.ORDERS||0, sst:+r.SST||0,
+        cancel:+r.CANCEL||0, mkd:+r.MARKDOWN||0, mkdp:+r.MKD_PRO||0,
+        bookings:+r.BOOKINGS||0, revenue:+r.REVENUE||0
+      };
+    });
+
+    const allWeeks=[...new Set(rows.map(r=>r.WEEK_DATE))].sort();
+    const N=allWeeks.length;
+    const lastWk=allWeeks[N-1], prevWk=allWeeks[N-2];
+    const w26=allWeeks.filter(w=>w.startsWith('2026'));
+    const nYTD=w26.length;
+    const w25=allWeeks.filter(w=>w.startsWith('2025')).slice(0,nYTD);
+
+    function sum(brand,weeks,metric){ return weeks.reduce((s,w)=>s+(bw[brand]?.[w]?.[metric]||0),0); }
+    function pct(a,b){ return b ? (a-b)/b*100 : null; }
+    function fmt(n){ if(n>=1e6) return '$'+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return '$'+(n/1e3).toFixed(0)+'K'; return '$'+n.toFixed(0); }
+    function arw(p,suffix=''){
+      if(p===null) return '<span style="color:#9CA3AF">—</span>';
+      const c=p>=0?'#22C55E':'#EF4444', s=p>=0?'▲':'▼';
+      return `<span style="color:${c};font-weight:700">${s} ${Math.abs(p).toFixed(1)}%${suffix}</span>`;
+    }
+
+    const COLORS={'Hooters':'#FF6B35','Cancino':'#7C3AED','Lucky Sushi':'#DC2626',
+      'Sushi Shop Teikit':'#1D4ED8','Tierra Garat':'#059669','Maison Kayser':'#B45309'};
+
+    const brands=Object.keys(bw).sort();
+
+    // ── Tarjetas por marca ─────────────────────────────────────────────────────
+    let cards='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-bottom:24px">';
+    brands.forEach(brand=>{
+      const color=COLORS[brand]||'#6B7280';
+      const lw=bw[brand]?.[lastWk]||{}, pw=bw[brand]?.[prevWk]||{};
+      const lw_gmv=lw.gmv||0, pw_gmv=pw.gmv||0;
+      const lw_ord=lw.orders||0, lw_sst=lw.sst||0;
+      const lw_aov=lw_ord>0?lw_gmv/lw_ord:0;
+      const lw_cvr=lw_sst>0?lw_ord/lw_sst*100:0;
+      const lw_mkd=lw_gmv>0?(lw.mkd||0)/lw_gmv*100:0;
+      const ytd26=sum(brand,w26,'gmv'), ytd25=sum(brand,w25,'gmv');
+      const ytd26_o=sum(brand,w26,'orders'), ytd25_o=sum(brand,w25,'orders');
+      cards+=`
+      <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;border-top:4px solid ${color};padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+        <div style="font-size:14px;font-weight:800;color:#1F2937;margin-bottom:12px">${brand}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">Ventas LW</div>
+            <div style="font-size:17px;font-weight:800;color:#111827">${fmt(lw_gmv)}</div>
+            <div style="font-size:11px;margin-top:2px">${arw(pct(lw_gmv,pw_gmv))} vs ant</div>
+          </div>
+          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">YTD 2026</div>
+            <div style="font-size:17px;font-weight:800;color:#111827">${fmt(ytd26)}</div>
+            <div style="font-size:11px;margin-top:2px">${arw(pct(ytd26,ytd25))} YoY</div>
+          </div>
+          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">Órdenes LW</div>
+            <div style="font-size:16px;font-weight:800;color:#111827">${lw_ord.toLocaleString()}</div>
+            <div style="font-size:11px;margin-top:2px">${arw(pct(ytd26_o,ytd25_o))} YTD YoY</div>
+          </div>
+          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">AOV · CVR · MKD</div>
+            <div style="font-size:13px;font-weight:800;color:#111827">$${lw_aov.toFixed(0)} · ${lw_cvr.toFixed(1)}%</div>
+            <div style="font-size:11px;color:#6B7280;margin-top:2px">MKD ally: ${lw_mkd.toFixed(1)}%</div>
+          </div>
+        </div>
+      </div>`;
+    });
+    cards+='</div>';
+
+    // ── Tabla YoY resumen ──────────────────────────────────────────────────────
+    let tbl=`<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:16px">
+      <div style="font-size:14px;font-weight:700;color:#1F2937;margin-bottom:12px">📊 Comparativo YoY — YTD ${new Date().getFullYear()} (${nYTD} semanas)</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:#F3F4F6">
+        <th style="padding:8px 12px;text-align:left;font-weight:700;color:#374151">Marca</th>
+        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YTD 2025</th>
+        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YTD 2026</th>
+        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YoY %</th>
+        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">Ords YoY</th>
+        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">Ventas LW</th>
+      </tr></thead><tbody>`;
+    brands.forEach((brand,i)=>{
+      const ytd26=sum(brand,w26,'gmv'), ytd25=sum(brand,w25,'gmv');
+      const ytd26_o=sum(brand,w26,'orders'), ytd25_o=sum(brand,w25,'orders');
+      const yg=pct(ytd26,ytd25), yo=pct(ytd26_o,ytd25_o);
+      const lw_gmv=bw[brand]?.[lastWk]?.gmv||0;
+      const gc=yg!==null&&yg>=0?'#22C55E':'#EF4444';
+      const oc=yo!==null&&yo>=0?'#22C55E':'#EF4444';
+      tbl+=`<tr style="background:${i%2?'#F9FAFB':'#fff'}">
+        <td style="padding:8px 12px;font-weight:600;color:#111827">${brand}</td>
+        <td style="padding:8px 12px;text-align:right;color:#374151">${fmt(ytd25)}</td>
+        <td style="padding:8px 12px;text-align:right;color:#374151">${fmt(ytd26)}</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:${gc}">${yg!==null?(yg>=0?'+':'')+yg.toFixed(1)+'%':'—'}</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:${oc}">${yo!==null?(yo>=0?'+':'')+yo.toFixed(1)+'%':'—'}</td>
+        <td style="padding:8px 12px;text-align:right">${fmt(lw_gmv)}</td>
+      </tr>`;
+    });
+    tbl+='</tbody></table></div></div>';
+
+    // Fecha formato bonito
+    const [yy,mm,dd]=lastWk.split('-').map(Number);
+    const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const lastWkFmt=`${dd} ${meses[mm-1]} ${yy}`;
+
+    container.innerHTML=`
+      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+        <h2 style="margin:0;font-size:18px;font-weight:800;color:#1F2937">🎯 SWAT Brands</h2>
+        <span style="font-size:12px;color:#6B7280;background:#F3F4F6;padding:3px 10px;border-radius:20px">Última semana: ${lastWkFmt} · YTD: ${nYTD} semanas vs 2025</span>
+        <button onclick="document.getElementById('swat-dashboard').dataset.loaded='';renderSWAT()"
+          style="margin-left:auto;background:#F3F4F6;border:none;border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;color:#374151">↺ Actualizar</button>
+      </div>
+      ${cards}${tbl}`;
+    container.dataset.loaded='1';
+  } catch(e){
+    container.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:16px;color:#DC2626;font-size:13px">⚠️ Error cargando SWAT: ${e.message}</div>`;
+  }
+}
+
 // YoY por CARTERA COMERCIAL
 // ============================================================
 window._yoyCarteraExpanded = {};
@@ -5385,19 +5676,4 @@ function renderYoYCartera(){
         html += '<td style="padding:7px 8px;font-size:10px;color:#1A1A2E">'+topDnCell+'</td>';
         html += '</tr>';
       }
-      html += '</tbody></table></div></div>';
-    }
-    
-    html += '</div>';
-  }
-  
-  cont.innerHTML = html;
-}
-
-function toggleYoYLider(lider){
-  window._yoyCarteraExpanded[lider] = window._yoyCarteraExpanded[lider] === false ? true : false;
-  renderYoYCartera();
-}
-</script>
-
-</body></html>  
+      html += '</tbody></table></div></div>

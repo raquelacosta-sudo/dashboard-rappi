@@ -3560,10 +3560,10 @@ function renderMoProdList(){
   const maxO = prods.length? prods[0].ordenes:1;
   document.getElementById('moProdList').innerHTML = prods.map((p,i)=>`
     <div class="mo-prod-item">
-      <div class="mo-prod-rank">#${i+1} ${p.categoria}</div>
-      <div class="mo-prod-name" title="${p.producto}">${p.producto}</div>
-      <div class="mo-prod-marca">${p.marca}</div>
-      <div class="mo-prod-stat">${fmtN(p.ordenes)} órd · ${fmtN(p.unidades)} uds · ${fmtM(p.revenue_usd)}</div>
+      <div class="mo-prod-rank">#${i+1}</div>
+      <div class="mo-prod-name" title="${p.product||''}">${p.product||(p.producto||'(sin nombre)')}</div>
+      <div class="mo-prod-marca">${p.marca||''}</div>
+      <div class="mo-prod-stat">${fmtN(p.ordenes)} órdenes</div>
       <div style="height:3px;background:#F3F4F6;border-radius:2px;margin-top:4px">
         <div style="height:3px;background:var(--red);border-radius:2px;width:${Math.round(p.ordenes/maxO*100)}%;opacity:.7"></div>
       </div>
@@ -5580,7 +5580,7 @@ async function renderSWAT(){
     const nYTD=w26.length;
     const w25=allWeeks.filter(w=>w.startsWith('2025')).slice(0,nYTD);
 
-    function sum(brand,weeks,metric){ return weeks.reduce((acc + ((bw[brand]?.[wk]?.[metric]) || 0), 0); }
+    function sum(brand,weeks,metric){ return weeks.reduce((acc,wk)=>acc+((bw[brand]?.[wk]?.[metric])||0), 0); }
 
     // Build brand summary
     const SWAT_COLORS = {
@@ -5664,6 +5664,135 @@ async function renderSWAT(){
     container.innerHTML = '<div style="padding:20px;color:#EF4444;font-size:12px">❌ Error cargando SWAT: ' + e.message + '</div>';
   }
 }
+
+// ── YOY CARTERA COMERCIAL ───────────────────────────────────────────
+window._yoyCarteraExpanded = {};
+
+function renderYoYCartera(){
+  const cont = document.getElementById('yoyCarteraContent');
+  if(!cont) return;
+
+  const lideres = {};
+  for(const cb of (DATA.callout_brands || [])){
+    if(!lideres[cb.lider]) lideres[cb.lider] = {
+      lider:cb.lider, kams:{},
+      gmv26:0, gmv25:0, ord26:0, ord25:0, traf26:0, traf25:0, rev26:0, rev25:0, brands_count:0
+    };
+    const L = lideres[cb.lider];
+    L.gmv26 += cb.gmv_ytd_26||0; L.gmv25 += cb.gmv_ytd_25||0;
+    L.ord26 += cb.ord_ytd_26||0; L.ord25 += cb.ord_ytd_25||0;
+    L.traf26 += cb.traf_26||0;   L.traf25 += cb.traf_25||0;
+    L.rev26 += cb.rev_ytd_26||0; L.rev25 += cb.rev_ytd_25||0;
+    L.brands_count++;
+    if(!L.kams[cb.kam]) L.kams[cb.kam] = {
+      kam:cb.kam, brands:[],
+      gmv26:0, gmv25:0, ord26:0, ord25:0, traf26:0, traf25:0
+    };
+    const K = L.kams[cb.kam];
+    K.gmv26 += cb.gmv_ytd_26||0; K.gmv25 += cb.gmv_ytd_25||0;
+    K.ord26 += cb.ord_ytd_26||0; K.ord25 += cb.ord_ytd_25||0;
+    K.traf26 += cb.traf_26||0;   K.traf25 += cb.traf_25||0;
+    K.brands.push(cb);
+  }
+
+  const pct = (a,b) => b>0 ? ((a-b)/b*100) : null;
+  const varCell = (d, inv) => {
+    if(d==null) return '<td style="padding:6px 8px;text-align:right;color:#9CA3AF;font-size:11px">—</td>';
+    const good = inv ? d<=0 : d>=0;
+    const c = good?'#166534':'#991B1B', bg = good?'#DCFCE7':'#FEE2E2';
+    return `<td style="padding:6px 8px;text-align:right;background:${bg};color:${c};font-weight:700;font-size:11px">${d>=0?'+':''}${d.toFixed(1)}%</td>`;
+  };
+
+  let html = '';
+  const liderList = Object.values(lideres).sort((a,b)=>b.gmv26-a.gmv26);
+
+  for(const L of liderList){
+    const dGmv = pct(L.gmv26, L.gmv25);
+    const dOrd = pct(L.ord26, L.ord25);
+    const dTraf = pct(L.traf26, L.traf25);
+    const expanded = window._yoyCarteraExpanded[L.lider] !== false;
+    const lName = (window.LS&&LS[L.lider])||L.lider.split('@')[0];
+    const aov26 = L.ord26>0?L.gmv26/L.ord26:0, aov25 = L.ord25>0?L.gmv25/L.ord25:0;
+
+    html += `<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <div style="background:#1F2937;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer"
+           onclick="toggleYoYLider('${L.lider}')">
+        <div>
+          <span style="font-size:14px;font-weight:900">👤 ${lName}</span>
+          <span style="margin-left:10px;font-size:11px;opacity:.7">${L.brands_count} marcas · ${Object.keys(L.kams).length} KAMs</span>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center">
+          <span style="font-size:13px;font-weight:700">GMV: $${(L.gmv26/1e6).toFixed(2)}M</span>
+          ${dGmv!=null?`<span style="background:${dGmv>=0?'#DCFCE7':'#FEE2E2'};color:${dGmv>=0?'#166534':'#991B1B'};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700">${dGmv>=0?'+':''}${dGmv.toFixed(1)}%</span>`:''}
+          <span style="font-size:16px">${expanded?'▲':'▼'}</span>
+        </div>
+      </div>`;
+
+    if(expanded){
+      // Lider summary row
+      html += `<div style="padding:12px 16px;border-bottom:2px solid #F3F4F6;display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;background:#FAFAFA">
+        <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV YTD 2025</div><div style="font-weight:800;color:#374151">$${(L.gmv25/1e6).toFixed(2)}M</div></div>
+        <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV YTD 2026</div><div style="font-weight:900;color:#FF441F">$${(L.gmv26/1e6).toFixed(2)}M ${dGmv!=null?`<span style="font-size:10px">${dGmv>=0?'+':''}${dGmv.toFixed(1)}%</span>`:''}</div></div>
+        <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Órdenes 2026</div><div style="font-weight:800">${(L.ord26/1e3).toFixed(1)}K ${dOrd!=null?`<span style="font-size:10px;color:${dOrd>=0?'#166534':'#991B1B'}">${dOrd>=0?'+':''}${dOrd.toFixed(1)}%</span>`:''}</div></div>
+        <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Tráfico 2026</div><div style="font-weight:800">${(L.traf26/1e3).toFixed(1)}K ${dTraf!=null?`<span style="font-size:10px;color:${dTraf>=0?'#166534':'#991B1B'}">${dTraf>=0?'+':''}${dTraf.toFixed(1)}%</span>`:''}</div></div>
+        <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">AOV 2026</div><div style="font-weight:800">$${aov26.toFixed(0)} <span style="font-size:10px;color:${aov26>=aov25?'#166534':'#991B1B'}">${aov25>0?((aov26-aov25)/aov25*100>=0?'+':'')+(((aov26-aov25)/aov25)*100).toFixed(1)+'%':''}</span></div></div>
+      </div>`;
+
+      // KAM breakdown table
+      const kamList = Object.values(L.kams).sort((a,b)=>b.gmv26-a.gmv26);
+      html += `<div style="overflow-x:auto;padding:12px 16px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:#F9FAFB">
+            <th style="padding:6px 8px;text-align:left;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">KAM</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Marcas</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">GMV 2025</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">GMV 2026</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Δ GMV</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Órd 2026</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Δ Órd</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Tráfico 2026</th>
+            <th style="padding:6px 8px;text-align:right;font-weight:800;color:#374151;font-size:10px;text-transform:uppercase">Δ Tráf</th>
+          </tr></thead>
+          <tbody>`;
+
+      kamList.forEach((K,ki)=>{
+        const dkg = pct(K.gmv26,K.gmv25), dko = pct(K.ord26,K.ord25), dkt = pct(K.traf26,K.traf25);
+        const topUp = K.brands.filter(b=>(pct(b.gmv_ytd_26,b.gmv_ytd_25)||0)>0).sort((a,b_)=>(pct(b_.gmv_ytd_26,b_.gmv_ytd_25)||0)-(pct(a.gmv_ytd_26,a.gmv_ytd_25)||0)).slice(0,2).map(b=>b.marca||b.brand_id).join(', ');
+        const topDn = K.brands.filter(b=>(pct(b.gmv_ytd_26,b.gmv_ytd_25)||0)<0).sort((a,b_)=>(pct(a.gmv_ytd_26,a.gmv_ytd_25)||0)-(pct(b_.gmv_ytd_26,b_.gmv_ytd_25)||0)).slice(0,2).map(b=>b.marca||b.brand_id).join(', ');
+        html += `<tr style="border-bottom:1px solid #F3F4F6;background:${ki%2===0?'#fff':'#FAFAFA'}">
+          <td style="padding:7px 8px;font-weight:700;color:#1A1A2E;font-size:11px">${K.kam}</td>
+          <td style="padding:7px 8px;text-align:right;font-size:11px;color:#6B7280">${K.brands.length}</td>
+          <td style="padding:7px 8px;text-align:right;font-size:11px;color:#9CA3AF">$${(K.gmv25/1e6).toFixed(2)}M</td>
+          <td style="padding:7px 8px;text-align:right;font-weight:700;font-size:11px;color:#374151">$${(K.gmv26/1e6).toFixed(2)}M</td>
+          ${varCell(dkg)}
+          <td style="padding:7px 8px;text-align:right;font-size:11px;color:#374151">${(K.ord26/1e3).toFixed(1)}K</td>
+          ${varCell(dko)}
+          <td style="padding:7px 8px;text-align:right;font-size:11px;color:#374151">${(K.traf26/1e3).toFixed(1)}K</td>
+          ${varCell(dkt)}
+        </tr>`;
+        if(topUp||topDn){
+          html += `<tr style="border-bottom:2px solid #F3F4F6;background:${ki%2===0?'#fff':'#FAFAFA'}">
+            <td colspan="9" style="padding:3px 8px 6px 8px;font-size:10px;color:#6B7280">
+              ${topUp?`🟢 Sube: <strong>${topUp}</strong>`:''} ${topDn?`&nbsp;&nbsp;🔴 Baja: <strong>${topDn}</strong>`:''}
+            </td>
+          </tr>`;
+        }
+      });
+
+      html += '</tbody></table></div>';
+    }
+    html += '</div>';
+  }
+
+  if(!html) html = '<div style="padding:32px;text-align:center;color:#9CA3AF">Sin datos YoY. Asegúrate de que el tab callouts esté cargado.</div>';
+  cont.innerHTML = html;
+}
+
+function toggleYoYLider(lider){
+  window._yoyCarteraExpanded[lider] = window._yoyCarteraExpanded[lider] === false ? true : false;
+  renderYoYCartera();
+}
+
 </script>
 
 </body></html>

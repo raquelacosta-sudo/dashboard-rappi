@@ -1118,7 +1118,7 @@ async function _buildDataFromSheet() {
     const r26=sliceAgg(brand,w26), r25=sliceAgg(brand,w25);
     const r4=sliceAgg(brand,l4w),  rp4=sliceAgg(brand,p4w);
     return {
-      marca:brand, lider:meta.lider, kam:meta.kam,
+      marca:brand, lider:meta.lider, kam:meta.kam, kam_email:(meta.kam_email||meta.kam||'').toLowerCase(),
       gmv_lw:lw_v, gmv_pw:pw_v, delta_lw:pct(lw_v,pw_v),
       gmv_l4w:r4.gmv, gmv_p4w:rp4.gmv, delta_l4w:pct(r4.gmv,rp4.gmv),
       gmv_ytd_26:r26.gmv, gmv_ytd_25:r25.gmv, delta_ytd:pct(r26.gmv,r25.gmv),
@@ -4020,7 +4020,7 @@ function renderCaidasTable(){
   const week=DATA.last_week_str||'';
 
   const brands=(DATA.callout_brands||[]).filter(b=>
-    (!kam||b.kam===kam)&&(!liderF||b.lider===liderF)
+    (!kam||b.kam_email===kam)&&(!liderF||b.lider===liderF)
   );
   const n=DATA.all_weeks.length;
   const totalKamGmv=brands.reduce((s,b)=>s+(b.gmv_lw||0),0);

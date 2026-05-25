@@ -299,7 +299,7 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
       <button class="tab" onclick="showTab('yoy_cartera',this)">📁 YoY Cartera</button>
   <button class="tab" onclick="showTab('caidas',this)">🔍 Zooms Semanales</button>
   <button class="tab" onclick="showTab('ads',this)">📡 Ads & Forecast</button>
-  <button class="tab" onclick="showTab('momentos',this)">🕐 Momentos</button>
+  
 <button class="tab" onclick="showTab('swat',this)">🎯 SWAT Brands</button>
 </div>
 
@@ -587,68 +587,6 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 .mo-prod-stat{font-size:11px;font-weight:700;color:var(--red)}
 </style>
 <!-- MOMENTOS DE CONSUMO -->
-<div id="tab-momentos" class="tab-content">
-  <!-- Header -->
-  <div class="mo-header-bar">
-    <div style="font-size:14px;font-weight:800;color:var(--dark)">🕐 Momentos de Consumo</div>
-    <div class="mo-week-badge" id="moWeekBadge"></div>
-    <div id="moGlobalTotal" style="font-size:12px;color:#6B7280;margin-left:auto"></div>
-  </div>
-
-  <!-- 1. Distribución Global -->
-  <div class="mo-section-title">📊 Distribución Global</div>
-  <div class="mo-global-strip" id="moGlobalStrip"></div>
-
-  <!-- 2. Por Líder -->
-  <div class="mo-section-title">👤 Por Líder</div>
-  <div class="mo-lider-grid" id="moLiderGrid"></div>
-
-  <!-- 3. Top Productos por Momento -->
-  <div class="mo-prod-panel">
-    <h3>🍔 Top Productos por Momento</h3>
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
-      <select id="moProdLider" onchange="renderMoProdList()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:5px 10px;font-size:12px">
-        <option value="">Todos los líderes</option>
-      </select>
-      <select id="moProdKam" onchange="renderMoProdList()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:5px 10px;font-size:12px">
-        <option value="">Todos los comerciales</option>
-      </select>
-    </div>
-    <div class="mo-prod-tabs" id="moProdTabs"></div>
-    <div class="mo-prod-list" id="moProdList"></div>
-  </div>
-
-  <!-- 4. Pivot por Marca -->
-  <div class="mo-section-title">🏪 Por Marca — distribución de órdenes</div>
-  <div class="mo-filters">
-    <input id="moSearch" placeholder="Buscar marca..." oninput="renderMoPivot()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:6px 11px;font-size:13px;width:200px"/>
-    <select id="moLider" onchange="renderMoPivot()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:6px 11px;font-size:13px">
-      <option value="">Todos los líderes</option>
-    </select>
-    <select id="moKam" onchange="renderMoPivot()" style="border:1.5px solid #D1D5DB;border-radius:8px;padding:6px 11px;font-size:13px">
-      <option value="">Todos los comerciales</option>
-    </select>
-    <div id="moDpBtns" style="display:flex;gap:4px;flex-wrap:wrap"></div>
-    <span class="tbl-info" id="moInfo" style="margin-left:auto"></span>
-  </div>
-  <div class="table-wrap">
-    <div style="overflow-x:auto">
-    <table><thead><tr>
-      <th>#</th>
-      <th onclick="sortMoPivot('marca')">Marca ↕</th>
-      <th>Líder</th><th>Comercial</th>
-      <th onclick="sortMoPivot('total')">Total Órd ↕</th>
-      <th style="text-align:center">🌙 Madrugada</th>
-      <th style="text-align:center">🌅 Desayuno</th>
-      <th style="text-align:center">🍽️ Comida</th>
-      <th style="text-align:center">☕ After Lunch</th>
-      <th style="text-align:center">🌆 Cena</th>
-    </tr></thead><tbody id="moTbody"></tbody></table>
-    </div>
-    <div class="pagination" id="moPag"></div>
-  </div>
-</div>
-
 <div id="tab-swat" class="tab-content">
   <div id="swat-dashboard" style="min-height:200px">
     <div style="text-align:center;padding:48px;color:#9CA3AF;font-size:13px">Clic en 🎯 SWAT para cargar datos...</div>
@@ -1429,7 +1367,6 @@ function showTab(id,btn){
   if(id==='marcas') renderMarcas();
   if(id==='alertas') initAlertas();
   if(id==='callouts') initCallouts();
-  if(id==='momentos') initMomentos();
   if(id==='caidas') initCaidas();
   if(id==='ads') initAds();
   if(id==='yoy_cartera') renderYoYCartera();
@@ -5541,129 +5478,402 @@ function cbDriverAnalysis(){
 
 
 // ============================================================
-// ============================================================
-// SWAT BRANDS — Dashboard en vivo desde tab "swat" del Sheet
+// SWAT BRANDS — Dashboard diario desde tab "swat" del Sheet
+// Data: 1 fila = 1 marca × 1 día (ORDER_DATE diaria)
 // ============================================================
 async function renderSWAT(){
   const container = document.getElementById('swat-dashboard');
-  if(!container || container.dataset.loaded==='1') return;
-  container.innerHTML='<div style="text-align:center;padding:48px;color:#6B7280;font-size:13px">⏳ Cargando datos SWAT...</div>';
-  try{
-    const url=`https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=swat&t=${Date.now()}`;
-    const resp=await fetch(url);
-    if(!resp.ok) throw new Error('No se pudo cargar el tab swat (status '+resp.status+')');
-    let text=await resp.text();
-    // Saltar fila metadata de Aleph, inyectar header con orden del SELECT
-    const lines=text.split('\n'); lines.shift();
-    lines.unshift(',BRAND_ID,BRAND,WEEK_DATE,YR,GMV,BOOKINGS,REVENUE,ORDERS,SST,CANCEL,MARKDOWN,MKD_PRO,AOV');
-    text=lines.join('\n');
-    const today=new Date().toISOString().slice(0,10);
-    const rows=_parseCSV(text).filter(r=>r.BRAND_ID && r.WEEK_DATE && r.WEEK_DATE<today);
-    if(!rows.length) throw new Error('Sin filas en el tab swat');
+  if(!container) return;
+  if(container.dataset.loaded==='1' && window._swatCache) return;
+  container.innerHTML = '<div style="background:#f5ede3;border-radius:16px;padding:40px;text-align:center;color:#8B6A4A;font-family:sans-serif;font-size:14px">⏳ Cargando datos SWAT…</div>';
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=swat&t=${Date.now()}`;
+    const resp = await fetch(url);
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    let text = await resp.text();
+    // Remover fila metadata de Aleph, inyectar header con columnas del SELECT diario
+    const lines = text.split('\n');
+    lines.shift();
+    lines.unshift(',BRAND_ID,BRAND,ORDER_DATE,GMV,ORDERS,SST,CANCEL_RATE_PCT,MARKDOWN,MKD_PRO,AOV');
+    text = lines.join('\n');
+    const today = new Date().toISOString().slice(0,10);
+    const rows = _parseCSV(text).filter(r => r.BRAND_ID && r.ORDER_DATE && r.ORDER_DATE < today);
+    if(!rows.length) throw new Error('Sin datos en el tab SWAT');
 
-    // Organizar por marca → semana → métricas
-    const bw={};
-    rows.forEach(r=>{
-      const b=r.BRAND||''; if(!b) return;
-      if(!bw[b]) bw[b]={};
-      bw[b][r.WEEK_DATE]={
+    // Organizar: bd[brand][date] = métricas diarias
+    const bd = {};
+    rows.forEach(r => {
+      const b = r.BRAND || ''; if(!b) return;
+      if(!bd[b]) bd[b] = {};
+      bd[b][r.ORDER_DATE] = {
         gmv:+r.GMV||0, orders:+r.ORDERS||0, sst:+r.SST||0,
-        cancel:+r.CANCEL||0, mkd:+r.MARKDOWN||0, mkdp:+r.MKD_PRO||0,
-        bookings:+r.BOOKINGS||0, revenue:+r.REVENUE||0
+        cancel_rate:+r.CANCEL_RATE_PCT||0, mkd:+r.MARKDOWN||0, mkdp:+r.MKD_PRO||0,
+        aov:+r.AOV||0
       };
     });
 
-    const allWeeks=[...new Set(rows.map(r=>r.WEEK_DATE))].sort();
-    const N=allWeeks.length;
-    const lastWk=allWeeks[N-1], prevWk=allWeeks[N-2];
-    const w26=allWeeks.filter(w=>w.startsWith('2026'));
-    const nYTD=w26.length;
-    const w25=allWeeks.filter(w=>w.startsWith('2025')).slice(0,nYTD);
+    // Todas las fechas únicas ordenadas
+    const allDates = [...new Set(rows.map(r => r.ORDER_DATE))].sort();
+    const d26 = allDates.filter(d => d.startsWith('2026'));
+    const d25 = allDates.filter(d => d.startsWith('2025'));
+    // Para YoY: emparejar misma fecha calendario (2026-MM-DD ↔ 2025-MM-DD)
+    const ytdCutoff = d26.length > 0 ? d26[d26.length-1].slice(5) : '12-31'; // MM-DD del último día 2026
+    const d25ytd = d25.filter(d => d.slice(5) <= ytdCutoff);
 
-    function sum(brand,weeks,metric){ return weeks.reduce((acc,wk)=>acc+((bw[brand]?.[wk]?.[metric])||0), 0); }
-
-    // Build brand summary
-    const SWAT_COLORS = {
-      'Hooters':'#FF6B35','Hooters (BC)':'#FF8C5A','Cancino':'#7C3AED',
-      'Lucky Sushi':'#DC2626','Sushi Shop Teikit':'#1D4ED8',
-      'Tierra Garat':'#059669','Maison Kayser':'#B45309'
-    };
-    const brands = Object.keys(bw).sort();
-    const brandSummary = brands.map(b => {
-      const gmv26 = sum(b, w26, 'gmv'), ord26 = sum(b, w26, 'orders');
-      const gmv25 = sum(b, w25, 'gmv'), ord25 = sum(b, w25, 'orders');
-      const aov26 = ord26 > 0 ? gmv26 / ord26 : 0;
-      const aov25 = ord25 > 0 ? gmv25 / ord25 : 0;
-      return { name: b, gmv26, ord26, gmv25, ord25, aov26, aov25 };
-    }).sort((a,b) => b.gmv26 - a.gmv26);
-
-    if (!brandSummary.length) {
-      container.innerHTML = '<div style="padding:20px;color:#9CA3AF">Sin datos en el tab SWAT.</div>';
-      return;
+    // Helper: sumar métrica sobre rango de fechas de una marca
+    function daySum(brand, dates, metric) {
+      return dates.reduce((acc, dt) => acc + ((bd[brand] && bd[brand][dt] ? bd[brand][dt][metric] : 0) || 0), 0);
     }
 
-    const fmtM = v => '$' + (v/1e6).toFixed(2) + 'M';
-    const fmtK = v => v >= 1e3 ? (v/1e3).toFixed(0) + 'K' : String(Math.round(v));
-    const pct = (a,b) => b > 0 ? ((a-b)/b*100) : null;
-    const varChip = (d) => {
-      if (d == null) return '';
-      const c = d >= 0 ? '#166534' : '#991B1B', bg = d >= 0 ? '#DCFCE7' : '#FEE2E2';
-      return `<span style="background:${bg};color:${c};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">${d>=0?'+':''}${d.toFixed(1)}%</span>`;
-    };
+    // Helper: agrupar fechas diarias en bins semanales (lunes–domingo)
+    function toWeekBins(dates) {
+      const bins = {};
+      dates.forEach(dt => {
+        const d = new Date(dt + 'T00:00:00');
+        const day = d.getDay(); // 0=dom
+        const diff = (day === 0 ? -6 : 1 - day); // offset a lunes
+        const mon = new Date(d); mon.setDate(d.getDate() + diff);
+        const key = mon.toISOString().slice(0,10);
+        if(!bins[key]) bins[key] = [];
+        bins[key].push(dt);
+      });
+      return bins; // {YYYY-MM-DD(lunes): [dates...]}
+    }
 
-    // Cards
-    let html = '<div style="font-size:16px;font-weight:900;color:#1A1A2E;margin-bottom:16px;letter-spacing:-.5px">🎯 SWAT Brands — Seguimiento YoY</div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px">';
-    brandSummary.forEach(b => {
-      const col = SWAT_COLORS[b.name] || '#6B7280';
-      html += `<div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #F3F4F6;border-top:4px solid ${col};box-shadow:0 2px 10px rgba(0,0,0,.06)">
-        <div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:10px;border-bottom:1px solid #F3F4F6;padding-bottom:8px">${b.name}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV 2025</div><div style="font-size:15px;font-weight:900;color:#374151">${fmtM(b.gmv25)}</div></div>
-          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV 2026</div><div style="font-size:15px;font-weight:900;color:${col}">${fmtM(b.gmv26)}</div><div style="margin-top:2px">${varChip(pct(b.gmv26,b.gmv25))}</div></div>
-          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Órdenes 2025</div><div style="font-size:13px;font-weight:700;color:#374151">${fmtK(b.ord25)}</div></div>
-          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Órdenes 2026</div><div style="font-size:13px;font-weight:700;color:${col}">${fmtK(b.ord26)}</div><div style="margin-top:2px">${varChip(pct(b.ord26,b.ord25))}</div></div>
-        </div>
-      </div>`;
+    // Calcular semanas de 2026 y sus equivalentes en 2025 (mismo lunes calendar)
+    const bins26 = toWeekBins(d26);
+    const bins25 = toWeekBins(d25ytd);
+    const weekKeys26 = Object.keys(bins26).sort();
+    const weekKeys25 = Object.keys(bins25).sort();
+
+    const BRAND_ORDER = ['Tierra Garat','Cancino','Lucky Sushi','Sushi Shop Teikit','Hooters','Maison Kayser'];
+    const BRAND_META = {
+      'Tierra Garat':      { color:'#1a5c2e', emoji:'🌿' },
+      'Cancino':           { color:'#8B2000', emoji:'🥩' },
+      'Lucky Sushi':       { color:'#DC2626', emoji:'🍣' },
+      'Sushi Shop Teikit': { color:'#5c0a00', emoji:'🍱' },
+      'Hooters':           { color:'#FF6B35', emoji:'🦉' },
+      'Maison Kayser':     { color:'#B45309', emoji:'🥐' }
+    };
+    const brands = Object.keys(bd).sort((a,b2) => {
+      const ia = BRAND_ORDER.indexOf(a), ib = BRAND_ORDER.indexOf(b2);
+      if(ia>=0&&ib>=0) return ia-ib; if(ia>=0) return -1; if(ib>=0) return 1;
+      return a.localeCompare(b2);
+    });
+
+    window._swatCache = { bd, allDates, d26, d25ytd, bins26, bins25, weekKeys26, weekKeys25, brands, daySum, BRAND_META };
+
+    const lastDate = allDates[allDates.length-1] || '—';
+    const tabBtns = ['__general__'].concat(brands).map(t => {
+      const isGen = t === '__general__';
+      const meta = isGen ? null : (BRAND_META[t] || { emoji:'🏪' });
+      const label = isGen ? '📋 General' : (meta.emoji + ' ' + t);
+      const safeId = 'swat-tab-' + t.replace(/[^a-z0-9]/gi,'_');
+      return '<button onclick="renderSWATTab(\'' + t.replace(/'/g,"\\'") + '\')" id="' + safeId + '" ' +
+        'style="padding:7px 14px;border-radius:20px 20px 0 0;border:none;font-size:11px;font-weight:600;cursor:pointer;background:#2A1006;color:#C17B3F;transition:all .15s;white-space:nowrap">' + label + '</button>';
+    }).join('');
+
+    container.innerHTML =
+      '<div id="swat-wrapper" style="background:#f5ede3;border-radius:16px;overflow:hidden;font-family:\'Libre Franklin\',\'Segoe UI\',sans-serif">' +
+        '<div style="background:#3D1F0D;padding:18px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
+          '<div>' +
+            '<div style="font-family:\'Playfair Display\',Georgia,serif;font-size:21px;font-weight:700;color:#F5E6D8;letter-spacing:-.3px">🎯 SWAT Brands</div>' +
+            '<div style="font-size:11px;color:#C17B3F;margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:.5px">Seguimiento Diario · YoY 2025 vs 2026</div>' +
+          '</div>' +
+          '<div style="text-align:right">' +
+            '<div style="font-size:10px;color:#8B6A4A">Último dato</div>' +
+            '<div style="font-size:13px;font-weight:700;color:#C17B3F">' + lastDate + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div id="swat-tabs" style="display:flex;flex-wrap:wrap;gap:3px;padding:12px 20px 0;background:#3D1F0D;border-bottom:3px solid #C17B3F">' + tabBtns + '</div>' +
+        '<div id="swat-content" style="padding:24px;min-height:300px"></div>' +
+      '</div>';
+
+    container.dataset.loaded = '1';
+    renderSWATTab('__general__');
+
+  } catch(e) {
+    container.innerHTML = '<div style="background:#f5ede3;border-radius:16px;padding:24px;color:#A84830;font-size:13px;font-weight:600">❌ Error cargando SWAT: ' + e.message + '</div>';
+  }
+}
+
+window.renderSWATTab = function(tab) {
+  const cache = window._swatCache;
+  if(!cache) return;
+  const { bd, allDates, d26, d25ytd, bins26, bins25, weekKeys26, weekKeys25, brands, daySum, BRAND_META } = cache;
+
+  // Actualizar estilos de tabs
+  document.querySelectorAll('#swat-tabs button').forEach(function(btn) {
+    btn.style.background = '#2A1006'; btn.style.color = '#C17B3F'; btn.style.fontWeight = '600';
+  });
+  const safeTab = tab === '__general__' ? '__general__' : tab.replace(/[^a-z0-9]/gi,'_');
+  const activeBtn = document.getElementById('swat-tab-' + safeTab);
+  if(activeBtn) { activeBtn.style.background = '#C17B3F'; activeBtn.style.color = '#3D1F0D'; activeBtn.style.fontWeight = '700'; }
+
+  const content = document.getElementById('swat-content');
+  if(!content) return;
+
+  const fmtM  = v => '$' + (v/1e6).toFixed(2) + 'M';
+  const fmtK  = v => v >= 1e3 ? (v/1e3).toFixed(1) + 'K' : String(Math.round(v));
+  const fmtP  = v => '$' + v.toFixed(0);
+  const pct   = (a,b2) => b2 > 0 ? ((a-b2)/b2*100) : null;
+  const varBadge = d => {
+    if(d==null) return '<span style="color:#9CA3AF;font-size:10px">—</span>';
+    const pos=d>=0;
+    return '<span style="background:' + (pos?'rgba(62,123,82,.15)':'rgba(168,72,48,.15)') + ';color:' + (pos?'#3E7B52':'#A84830') + ';border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700">' + (pos?'+':'') + d.toFixed(1) + '%</span>';
+  };
+
+  // SVG bar chart semanal (2025 dorado suave vs 2026 marrón oscuro)
+  function weeklyBarSVG(wKeys26, wKeys25, brand) {
+    const n = wKeys26.length; if(n===0) return '';
+    const vals = wKeys26.map((wk,i) => {
+      const v26 = (bins26[wk]||[]).reduce((s,dt)=>s+((bd[brand]&&bd[brand][dt]?bd[brand][dt].gmv:0)||0),0);
+      const wk25 = wKeys25[i];
+      const v25 = wk25 ? (bins25[wk25]||[]).reduce((s,dt)=>s+((bd[brand]&&bd[brand][dt]?bd[brand][dt].gmv:0)||0),0) : 0;
+      return {v25,v26,label:wk.slice(5)};
+    });
+    const maxV = Math.max(...vals.map(v=>Math.max(v.v25,v.v26)),1);
+    const H=90, bW=12, gap=3, gGap=7;
+    const totalW = n*(bW*2+gap+gGap)-gGap;
+    const sc = v => Math.max(2,Math.round((v/maxV)*(H-18)));
+    let bars = '';
+    vals.forEach((v,i)=>{
+      const x0 = i*(bW*2+gap+gGap);
+      const h25=sc(v.v25), h26=sc(v.v26);
+      bars += '<rect x="'+x0+'" y="'+(H-18-h25)+'" width="'+bW+'" height="'+h25+'" fill="#C17B3F" opacity=".35" rx="2"/>';
+      bars += '<rect x="'+(x0+bW+gap)+'" y="'+(H-18-h26)+'" width="'+bW+'" height="'+h26+'" fill="#3D1F0D" opacity=".8" rx="2"/>';
+      bars += '<text x="'+(x0+bW+gap/2)+'" y="'+(H-3)+'" text-anchor="middle" font-size="7" fill="#8B6A4A">'+v.label+'</text>';
+    });
+    return '<svg width="100%" viewBox="0 0 '+Math.max(totalW,200)+' '+H+'" style="display:block;overflow:visible">'+bars+'</svg>';
+  }
+
+  // SVG línea diaria del mes actual
+  function dailyLineSVG(brand, month) {
+    const dates = d26.filter(dt=>dt.startsWith(month));
+    if(!dates.length) return '';
+    const vals = dates.map(dt=>(bd[brand]&&bd[brand][dt]?bd[brand][dt].gmv:0)||0);
+    const maxV = Math.max(...vals,1);
+    const H=70, W=400, pad=8;
+    const n = dates.length;
+    const step = n>1 ? (W-pad*2)/(n-1) : 1;
+    const y = v => H-pad-Math.round((v/maxV)*(H-pad*2));
+    const pts = vals.map((v,i)=>`${pad+i*step},${y(v)}`).join(' ');
+    return '<svg width="100%" viewBox="0 0 '+W+' '+H+'" style="display:block">' +
+      '<polyline points="'+pts+'" fill="none" stroke="#3D1F0D" stroke-width="2" stroke-linejoin="round"/>' +
+      vals.map((v,i)=>`<circle cx="${pad+i*step}" cy="${y(v)}" r="3" fill="#C17B3F"/>`).join('') +
+    '</svg>';
+  }
+
+  let html = '';
+
+  if(tab === '__general__') {
+    // ── TABLA GENERAL ──────────────────────────────────────
+    const bSum = brands.map(b => {
+      const g26=daySum(b,d26,'gmv'), o26=daySum(b,d26,'orders');
+      const g25=daySum(b,d25ytd,'gmv'), o25=daySum(b,d25ytd,'orders');
+      const s26=daySum(b,d26,'sst');
+      const aov26=o26>0?g26/o26:0, aov25=o25>0?g25/o25:0;
+      const cvr=s26>0?o26/s26*100:0;
+      return {name:b,g26,g25,o26,o25,aov26,aov25,s26,cvr};
+    });
+    const maxG = Math.max(...bSum.map(b=>b.g26),1);
+    const tG26=bSum.reduce((s,b)=>s+b.g26,0), tG25=bSum.reduce((s,b)=>s+b.g25,0);
+    const tO26=bSum.reduce((s,b)=>s+b.o26,0), tO25=bSum.reduce((s,b)=>s+b.o25,0);
+
+    html += '<div style="font-family:\'Playfair Display\',Georgia,serif;font-size:18px;font-weight:700;color:#3D1F0D;margin-bottom:14px">Comparativo General — YTD 2025 vs 2026</div>';
+
+    // KPI totales
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:18px">';
+    [['GMV YTD 2026',fmtM(tG26),pct(tG26,tG25),true],
+     ['GMV YTD 2025',fmtM(tG25),null,false],
+     ['Órdenes 2026',fmtK(tO26),pct(tO26,tO25),false],
+     ['Órdenes 2025',fmtK(tO25),null,false]
+    ].forEach(([lbl,val,d,hi])=>{
+      html += '<div style="background:'+(hi?'#3D1F0D':'#fff')+';border-radius:12px;padding:14px;border:1px solid #DDD0BF">' +
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:'+(hi?'#C17B3F':'#8B6A4A')+';letter-spacing:.5px;margin-bottom:4px">'+lbl+'</div>' +
+        '<div style="font-size:20px;font-weight:900;color:'+(hi?'#F5E6D8':'#3D1F0D')+'">'+val+'</div>' +
+        (d!=null?'<div style="margin-top:4px">'+varBadge(d)+'</div>':'') +
+        '</div>';
     });
     html += '</div>';
 
-    // Summary table
-    html += '<div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:10px">📋 Resumen comparativo YoY (YTD equivalente)</div>';
-    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>' +
-      ['Marca','GMV 2025','GMV 2026','Δ GMV%','Órd 2025','Órd 2026','Δ Órd%','AOV 2025','AOV 2026']
-      .map(h => `<th style="padding:6px 8px;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;text-align:${h==='Marca'?'left':'right'}">${h}</th>`).join('') +
-      '</tr></thead><tbody>';
-    brandSummary.forEach((b, i) => {
-      const col = SWAT_COLORS[b.name] || '#6B7280';
-      const dg = pct(b.gmv26, b.gmv25), do_ = pct(b.ord26, b.ord25);
-      const bgRow = i % 2 === 0 ? '#FAFAFA' : '#fff';
-      const vc = (d) => {
-        if(d==null) return '<td style="text-align:right;padding:5px 8px;color:#9CA3AF">—</td>';
-        const c=d>=0?'#166534':'#991B1B', bg=d>=0?'#DCFCE7':'#FEE2E2';
-        return `<td style="text-align:right;padding:5px 8px;background:${bg};color:${c};font-weight:700;font-size:10px">${d>=0?'+':''}${d.toFixed(1)}%</td>`;
+    // Brand cards
+    html += '<div style="display:flex;flex-direction:column;gap:10px">';
+    bSum.forEach(b => {
+      const meta = BRAND_META[b.name]||{color:'#6B7280',emoji:'🏪'};
+      const bw2 = Math.round(b.g26/maxG*100);
+      html += '<div style="background:#fff;border-radius:12px;padding:14px 16px;border:1px solid #DDD0BF;border-left:5px solid '+meta.color+'">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">' +
+          '<div style="font-size:13px;font-weight:800;color:#3D1F0D">'+meta.emoji+' '+b.name+'</div>' +
+          '<div style="display:flex;gap:6px;align-items:center">' +
+            '<span style="font-size:14px;font-weight:900;color:'+meta.color+'">'+fmtM(b.g26)+'</span>'+varBadge(pct(b.g26,b.g25)) +
+          '</div>' +
+        '</div>' +
+        '<div style="background:#EDE1D3;border-radius:4px;height:5px;margin-bottom:10px">' +
+          '<div style="background:'+meta.color+';height:5px;border-radius:4px;width:'+bw2+'%"></div>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:8px;font-size:11px">' +
+          '<div><div style="color:#8B6A4A;font-weight:700;text-transform:uppercase;font-size:9px">Órdenes</div><div style="font-weight:700;color:#3D1F0D">'+fmtK(b.o26)+' '+varBadge(pct(b.o26,b.o25))+'</div></div>' +
+          '<div><div style="color:#8B6A4A;font-weight:700;text-transform:uppercase;font-size:9px">AOV</div><div style="font-weight:700;color:#3D1F0D">'+fmtP(b.aov26)+' '+varBadge(pct(b.aov26,b.aov25))+'</div></div>' +
+          '<div><div style="color:#8B6A4A;font-weight:700;text-transform:uppercase;font-size:9px">CVR%</div><div style="font-weight:700;color:#3D1F0D">'+b.cvr.toFixed(1)+'%</div></div>' +
+        '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    // Tabla resumen
+    html += '<div style="margin-top:18px;background:#fff;border-radius:12px;padding:16px;border:1px solid #DDD0BF;overflow-x:auto">';
+    html += '<div style="font-family:\'Playfair Display\',Georgia,serif;font-size:14px;font-weight:700;color:#3D1F0D;margin-bottom:10px">📋 Tabla comparativa YoY (YTD equivalente)</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#f5ede3">';
+    ['Marca','GMV 25','GMV 26','Δ GMV','Órd 25','Órd 26','Δ Órd','AOV 25','AOV 26'].forEach(h=>{
+      html += '<th style="padding:7px 8px;text-align:'+(h==='Marca'?'left':'right')+';color:#8B6A4A;font-weight:800;text-transform:uppercase;font-size:10px;white-space:nowrap">'+h+'</th>';
+    });
+    html += '</tr></thead><tbody>';
+    bSum.forEach((b,i)=>{
+      const meta=BRAND_META[b.name]||{color:'#6B7280'};
+      const vc=d=>{
+        if(d==null) return '<td style="padding:5px 8px;text-align:right;color:#9CA3AF">—</td>';
+        const pos=d>=0;
+        return '<td style="padding:5px 8px;text-align:right;background:'+(pos?'rgba(62,123,82,.09)':'rgba(168,72,48,.09)')+';color:'+(pos?'#3E7B52':'#A84830')+';font-weight:700;font-size:10px">'+(pos?'+':'')+d.toFixed(1)+'%</td>';
       };
-      html += `<tr style="background:${bgRow};border-bottom:1px solid #F3F4F6">
-        <td style="padding:5px 8px;font-weight:700;color:#1A1A2E;border-left:3px solid ${col}">${b.name}</td>
-        <td style="padding:5px 8px;text-align:right;color:#374151">${fmtM(b.gmv25)}</td>
-        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">${fmtM(b.gmv26)}</td>
-        ${vc(dg)}
-        <td style="padding:5px 8px;text-align:right;color:#374151">${fmtK(b.ord25)}</td>
-        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">${fmtK(b.ord26)}</td>
-        ${vc(do_)}
-        <td style="padding:5px 8px;text-align:right;color:#374151">$${b.aov25.toFixed(0)}</td>
-        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">$${b.aov26.toFixed(0)}</td>
-      </tr>`;
+      html += '<tr style="background:'+(i%2?'#fff':'#FAFAFA')+';border-top:1px solid #EDE1D3">' +
+        '<td style="padding:5px 8px;font-weight:700;color:#3D1F0D;border-left:4px solid '+meta.color+';white-space:nowrap">'+b.name+'</td>' +
+        '<td style="padding:5px 8px;text-align:right;color:#8B6A4A">'+fmtM(b.g25)+'</td>' +
+        '<td style="padding:5px 8px;text-align:right;color:'+meta.color+';font-weight:700">'+fmtM(b.g26)+'</td>' +
+        vc(pct(b.g26,b.g25)) +
+        '<td style="padding:5px 8px;text-align:right;color:#8B6A4A">'+fmtK(b.o25)+'</td>' +
+        '<td style="padding:5px 8px;text-align:right;color:'+meta.color+';font-weight:700">'+fmtK(b.o26)+'</td>' +
+        vc(pct(b.o26,b.o25)) +
+        '<td style="padding:5px 8px;text-align:right;color:#8B6A4A">$'+b.aov25.toFixed(0)+'</td>' +
+        '<td style="padding:5px 8px;text-align:right;color:'+meta.color+';font-weight:700">$'+b.aov26.toFixed(0)+'</td>' +
+      '</tr>';
     });
     html += '</tbody></table></div>';
 
-    container.innerHTML = html;
-    container.dataset.loaded = '1';
+  } else {
+    // ── VISTA INDIVIDUAL ─────────────────────────────────────
+    const b = tab;
+    const meta = BRAND_META[b]||{color:'#6B7280',emoji:'🏪'};
 
-  } catch(e) {
-    container.innerHTML = '<div style="padding:20px;color:#EF4444;font-size:12px">❌ Error cargando SWAT: ' + e.message + '</div>';
+    const g26=daySum(b,d26,'gmv'), o26=daySum(b,d26,'orders');
+    const g25=daySum(b,d25ytd,'gmv'), o25=daySum(b,d25ytd,'orders');
+    const s26=daySum(b,d26,'sst');
+    const aov26=o26>0?g26/o26:0, aov25=o25>0?g25/o25:0;
+    const cvr=s26>0?o26/s26*100:0;
+
+    // Mes actual
+    const curMon = allDates.length>0?allDates[allDates.length-1].slice(0,7):'';
+    const dCur = d26.filter(dt=>dt.startsWith(curMon));
+    const gCur=daySum(b,dCur,'gmv'), oCur=daySum(b,dCur,'orders');
+    const daysElapsed=dCur.length;
+    // Días en el mes (aprox)
+    const daysInMon = new Date(+curMon.slice(0,4), +curMon.slice(5,7), 0).getDate();
+    const dailyPace = daysElapsed>0?gCur/daysElapsed:0;
+    const forecastGmv = dailyPace*daysInMon;
+    const pctMeta = forecastGmv>0?Math.min(200,gCur/forecastGmv*100):0;
+
+    // Últimas 10 semanas para el bar chart
+    const lastWKeys26 = weekKeys26.slice(-10);
+    const lastWKeys25 = weekKeys25.slice(-10);
+
+    // Últimos 14 días para tabla diaria
+    const last14days = d26.slice(-14);
+
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">' +
+      '<div style="width:50px;height:50px;border-radius:50%;background:'+meta.color+';display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0">'+meta.emoji+'</div>' +
+      '<div><div style="font-family:\'Playfair Display\',Georgia,serif;font-size:19px;font-weight:700;color:#3D1F0D">'+b+'</div>' +
+      '<div style="font-size:11px;color:#8B6A4A;margin-top:2px">YTD '+d26.length+' días · Mes actual: '+curMon+' ('+daysElapsed+' días)</div></div>' +
+    '</div>';
+
+    // KPI cards
+    const cards = [
+      {lbl:'GMV YTD 2026', val:fmtM(g26), d:pct(g26,g25), hi:true},
+      {lbl:'GMV YTD 2025', val:fmtM(g25), d:null, hi:false},
+      {lbl:'Órdenes 2026', val:fmtK(o26), d:pct(o26,o25), hi:false},
+      {lbl:'AOV 2026',     val:fmtP(aov26), d:pct(aov26,aov25), hi:false},
+      {lbl:'CVR% 2026',   val:cvr.toFixed(1)+'%', d:null, hi:false},
+      {lbl:'GMV Mes Act.', val:fmtM(gCur), d:null, hi:false},
+      {lbl:'Forecast Mes', val:fmtM(forecastGmv), d:null, hi:false},
+      {lbl:'% Avance',     val:pctMeta.toFixed(0)+'%', d:null, hi:false}
+    ];
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:10px;margin-bottom:16px">';
+    cards.forEach(c=>{
+      html += '<div style="background:'+(c.hi?meta.color:'#fff')+';border-radius:12px;padding:13px;border:1px solid '+(c.hi?meta.color:'#DDD0BF')+'">' +
+        '<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:'+(c.hi?'rgba(255,255,255,.7)':'#8B6A4A')+';letter-spacing:.5px;margin-bottom:3px">'+c.lbl+'</div>' +
+        '<div style="font-size:18px;font-weight:900;color:'+(c.hi?'#fff':'#3D1F0D')+'">'+c.val+'</div>' +
+        (c.d!=null?'<div style="margin-top:3px">'+varBadge(c.d)+'</div>':'') +
+      '</div>';
+    });
+    html += '</div>';
+
+    // Barra de progreso del mes
+    if(daysElapsed>0) {
+      html += '<div style="background:#fff;border-radius:12px;padding:14px;border:1px solid #DDD0BF;margin-bottom:14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">' +
+          '<span style="font-size:12px;font-weight:700;color:#3D1F0D">Avance mes vs Forecast ('+daysElapsed+'/'+daysInMon+' días)</span>' +
+          '<span style="font-size:12px;font-weight:800;color:'+meta.color+'">'+fmtM(gCur)+' / '+fmtM(forecastGmv)+'</span>' +
+        '</div>' +
+        '<div style="background:#EDE1D3;border-radius:6px;height:10px">' +
+          '<div style="background:'+meta.color+';height:10px;border-radius:6px;width:'+Math.min(100,pctMeta)+'%"></div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;margin-top:4px;font-size:10px;color:#8B6A4A">' +
+          '<span>Pace diario: '+fmtP(dailyPace)+'</span><span>'+pctMeta.toFixed(0)+'% del forecast</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Chart semanal
+    if(lastWKeys26.length>0) {
+      html += '<div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #DDD0BF;margin-bottom:14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">' +
+          '<div style="font-size:13px;font-weight:800;color:#3D1F0D">GMV Semanal — últimas '+lastWKeys26.length+' semanas</div>' +
+          '<div style="display:flex;gap:12px;font-size:10px;font-weight:700;color:#8B6A4A">' +
+            '<span><span style="display:inline-block;width:9px;height:9px;background:#C17B3F;opacity:.45;border-radius:2px;vertical-align:middle;margin-right:3px"></span>2025</span>' +
+            '<span><span style="display:inline-block;width:9px;height:9px;background:#3D1F0D;opacity:.8;border-radius:2px;vertical-align:middle;margin-right:3px"></span>2026</span>' +
+          '</div>' +
+        '</div>' +
+        weeklyBarSVG(lastWKeys26, lastWKeys25, b) +
+      '</div>';
+    }
+
+    // Línea diaria del mes actual
+    if(dCur.length>1) {
+      html += '<div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #DDD0BF;margin-bottom:14px">' +
+        '<div style="font-size:13px;font-weight:800;color:#3D1F0D;margin-bottom:8px">GMV Diario — '+curMon+'</div>' +
+        dailyLineSVG(b, curMon) +
+      '</div>';
+    }
+
+    // Tabla últimos 14 días
+    html += '<div style="background:#fff;border-radius:12px;padding:16px;border:1px solid #DDD0BF;overflow-x:auto">';
+    html += '<div style="font-size:13px;font-weight:800;color:#3D1F0D;margin-bottom:10px">Detalle últimos '+last14days.length+' días</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr style="background:#f5ede3">';
+    ['Fecha','GMV','Órdenes','AOV','Tráfico','CVR%','Cancel%'].forEach(h=>{
+      html += '<th style="padding:7px 8px;text-align:'+(h==='Fecha'?'left':'right')+';color:#8B6A4A;font-weight:800;text-transform:uppercase;font-size:10px">'+h+'</th>';
+    });
+    html += '</tr></thead><tbody>';
+    last14days.forEach((dt,i)=>{
+      const d=bd[b]&&bd[b][dt]?bd[b][dt]:{};
+      const cvr2=d.sst>0?d.orders/d.sst*100:0;
+      const canc=d.cancel_rate||0;
+      const isLast=(i===last14days.length-1);
+      html += '<tr style="border-top:1px solid #EDE1D3;'+(isLast?'background:#FFF8F0;':'')+'">' +
+        '<td style="padding:6px 8px;color:#5A3E28;font-weight:'+(isLast?'800':'500')+'">'+dt+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:'+meta.color+';font-weight:'+(isLast?'800':'600')+'">'+(d.gmv?fmtM(d.gmv):'—')+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:#3D1F0D">'+(d.orders?fmtK(d.orders):'—')+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:#3D1F0D">'+(d.aov?fmtP(d.aov):'—')+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:#3D1F0D">'+(d.sst?fmtK(d.sst):'—')+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:#3D1F0D">'+(cvr2?cvr2.toFixed(1)+'%':'—')+'</td>' +
+        '<td style="padding:6px 8px;text-align:right;color:'+(canc>8?'#A84830':'#3D1F0D')+'">'+(d.orders?canc.toFixed(1)+'%':'—')+'</td>' +
+      '</tr>';
+    });
+    html += '</tbody></table></div>';
   }
-}
+
+  content.innerHTML = html;
+};
+
+
 
 // ── YOY CARTERA COMERCIAL ───────────────────────────────────────────
 window._yoyCarteraExpanded = {};

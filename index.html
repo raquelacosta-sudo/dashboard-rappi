@@ -425,6 +425,8 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
 <div id="tab-lideres" class="tab-content">
   <div class="sec" id="secLideresHeader">Resumen por Líder — última semana vs semana anterior</div>
   <div id="lideresContent"></div>
+  <div id="liderMonthlyTable" style="margin-bottom:14px"></div>
+  <div id="liderWeeklyTable" style="margin-bottom:14px"></div>
   <div class="sec">KAMs — detalle con variación</div>
   <div class="table-wrap">
     <div class="table-search">
@@ -447,6 +449,8 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     </tr></thead><tbody id="kamTbody"></tbody></table></div>
     <div class="pagination" id="kamPag"></div>
   </div>
+  <div id="kamTrendMensual" style="margin-bottom:14px"></div>
+  <div id="kamTrendSemanal" style="margin-bottom:14px"></div>
 </div>
 
 <!-- TENDENCIAS KAM -->
@@ -463,6 +467,7 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     </select>
   </div>
   <div id="kamLwTable" style="margin-bottom:14px"></div>
+  <div id="kamWeeklyTable" style="margin-bottom:14px"></div>
   <div id="tendContent"></div>
 </div>
 
@@ -2147,7 +2152,7 @@ function renderBrandDetail(){
         wtDiv.innerHTML = '';
       } else {
         const aw = DATA.all_weeks;
-        const N_SHOW = 10;
+        const N_SHOW = 6;
         const startIdx = Math.max(0, len - N_SHOW);
         // Aggregate function: para sum metrics (ventas, ordenes) suma; para AOV recompute, para MKD weighted avg
         const aggIdx = (idx) => {
@@ -2312,6 +2317,139 @@ function initLideres(){
     return`<div class="lider-section"><div class="lider-header"><h3>👤 ${LS[l]||l}</h3><span style="font-size:11px;opacity:.7">${l}</span></div><div class="lider-metrics-grid">${rows}</div></div>`;
   }).join('');
   renderKamTable();
+  _renderLiderTrendTables();
+}
+
+function _renderLiderTrendTables(){
+  const lMDiv=document.getElementById('liderMonthlyTable');
+  const lWDiv=document.getElementById('liderWeeklyTable');
+  if(!lMDiv && !lWDiv) return;
+  const cBg=s=>s>0?'#DCFCE7':(s<0?'#FEE2E2':'#F9FAFB');
+  const cTx=s=>s>0?'#166534':(s<0?'#991B1B':'#6B7280');
+  const cD=(val,sign,isM)=>{const bg=cBg(sign),c=cTx(sign),pfx=sign>0?'+':(sign<0?'-':'');const f=isM?'$'+Math.round(Math.abs(val)).toLocaleString('en-US'):Math.round(Math.abs(val)).toLocaleString('en-US');return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+(val===0?'—':pfx+f)+'</td>';};
+  const cP=(pct,isPp)=>{if(pct==null)return '<td style="padding:5px 8px;background:#F9FAFB;color:#9CA3AF;text-align:right;font-size:11px">—</td>';const bg=cBg(pct),c=cTx(pct),suf=isPp?'pp':'%',pfx=pct>=0?'+':'';return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+pfx+pct.toFixed(2)+suf+'</td>';};
+  const THm=h=>'<th style="padding:6px 8px;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:'+(h==='Mes'||h==='Semana'?'left':'right')+'">'+h+'</th>';
+  const THw=h=>'<th style="padding:6px 8px;background:#EFF6FF;color:#1E40AF;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:'+(h==='Semana'?'left':'right')+'">'+h+'</th>';
+  const trRow=(label,v,dv,dvp,o,do_,dop,aov,daovp,mkd,dmkdpp)=>'<tr style="border-bottom:1px solid #F3F4F6">'+
+    '<td style="padding:5px 8px;font-weight:700;color:#1A1A2E;font-size:11px">'+label+'</td>'+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+Math.round(v).toLocaleString('en-US')+'</td>'+cD(dv,dv,true)+cP(dvp)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+Math.round(o).toLocaleString('en-US')+'</td>'+cD(do_,do_,false)+cP(dop)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+aov.toFixed(1)+'</td>'+cP(daovp)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+mkd.toFixed(2)+'%</td>'+cP(dmkdpp,true)+'</tr>';
+  const COLS_M=['Mes','Ventas','Δ$','Δ%','Órdenes','Δ','Δ%','AOV','AOV Δ%','MKD Ally %','MKD Δ pp'];
+  const COLS_W=['Semana','Ventas','Δ$','Δ%','Órdenes','Δ','Δ%','AOV','AOV Δ%','MKD Ally %','MKD Δ pp'];
+
+  if(lMDiv){
+    const map=_getMonthlyMap(), mKeys=Object.keys(map).sort();
+    const N_M=6, mStart=Math.max(0,mKeys.length-N_M);
+    let html='<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:14px"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📅 Desglose mensual por Líder (últimos 6 meses)</div>';
+    for(const l of DATA.leaders){
+      const ld=DATA.lider_weekly[l]; if(!ld) continue;
+      html+='<div style="margin-bottom:14px;border-left:4px solid #fe663d;padding-left:10px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:6px">👤 '+(LS[l]||l.split('@')[0])+'</div>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+COLS_M.map(THm).join('')+'</tr></thead><tbody>';
+      for(let mi=mKeys.length-1;mi>=mStart;mi--){
+        const {idxs,label}=map[mKeys[mi]];
+        let sv=0,so=0,wv=0,wma=0;
+        for(const i of idxs){const v=(ld.ventas||[])[i]||0;sv+=v;so+=(ld.ordenes||[])[i]||0;wv+=v;wma+=((ld.mkd_ally||[])[i]||0)*v;}
+        const aov=so>0?sv/so:0,mkd=wv>0?wma/wv:0;
+        let psv=0,pso=0,pwv=0,pwma=0;
+        if(mi>0){const {idxs:pi}=map[mKeys[mi-1]];for(const i of pi){const v=(ld.ventas||[])[i]||0;psv+=v;pso+=(ld.ordenes||[])[i]||0;pwv+=v;pwma+=((ld.mkd_ally||[])[i]||0)*v;}}
+        const paov=pso>0?psv/pso:0,pmkd=pwv>0?pwma/pwv:0;
+        html+=trRow(label,sv,sv-psv,psv>0?(sv-psv)/psv*100:null,so,so-pso,pso>0?(so-pso)/pso*100:null,aov,paov>0?(aov-paov)/paov*100:null,mkd,mkd-pmkd);
+      }
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';
+    lMDiv.innerHTML=html;
+  }
+
+  if(lWDiv){
+    const aw=DATA.all_weeks, wkLen=WL.length, N_WKS=6, startWk=Math.max(0,wkLen-N_WKS);
+    const fmtW=w=>{const p=w.split('-');return p.length<3?w:parseInt(p[2])+'/'+p[1]+'/'+p[0];};
+    let html='<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:14px"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📆 Desglose semanal por Líder (últimas 6 semanas)</div>';
+    for(const l of DATA.leaders){
+      const ld=DATA.lider_weekly[l]; if(!ld) continue;
+      html+='<div style="margin-bottom:14px;border-left:4px solid #3B82F6;padding-left:10px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:6px">👤 '+(LS[l]||l.split('@')[0])+'</div>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+COLS_W.map(THw).join('')+'</tr></thead><tbody>';
+      for(let wi=wkLen-1;wi>=startWk;wi--){
+        const v=(ld.ventas||[])[wi]||0,o=(ld.ordenes||[])[wi]||0,mkd=(ld.mkd_ally||[])[wi]||0;
+        const aov=o>0?v/o:0;
+        const pv=wi>0?(ld.ventas||[])[wi-1]||0:0,po=wi>0?(ld.ordenes||[])[wi-1]||0:0,pmkd=wi>0?(ld.mkd_ally||[])[wi-1]||0:0,paov=po>0?pv/po:0;
+        html+=trRow(fmtW(aw[wi]||''),v,v-pv,pv>0?(v-pv)/pv*100:null,o,o-po,po>0?(o-po)/po*100:null,aov,paov>0?(aov-paov)/paov*100:null,mkd,mkd-pmkd);
+      }
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';
+    lWDiv.innerHTML=html;
+  }
+}
+
+function _renderKamTrendTables(){
+  const mDiv=document.getElementById('kamTrendMensual');
+  const wDiv=document.getElementById('kamTrendSemanal');
+  if(!mDiv && !wDiv) return;
+  const liderF=document.getElementById('filtLider')?.value||'';
+  const kamF=document.getElementById('filtKam')?.value||'';
+  // Solo mostrar si hay un filtro activo (lider o KAM específico)
+  if(!liderF && !kamF){ if(mDiv) mDiv.innerHTML=''; if(wDiv) wDiv.innerHTML=''; return; }
+  let kamsToRender=[];
+  if(kamF){
+    const l=liderF||DATA.leaders.find(ld=>DATA.kam_trends[ld]?.[kamF]);
+    if(l) kamsToRender=[{lider:l,kam:kamF}];
+  } else if(liderF){
+    kamsToRender=Object.keys(DATA.kam_trends[liderF]||{}).sort().map(k=>({lider:liderF,kam:k}));
+  }
+  if(!kamsToRender.length){ if(mDiv) mDiv.innerHTML=''; if(wDiv) wDiv.innerHTML=''; return; }
+  const cBg=s=>s>0?'#DCFCE7':(s<0?'#FEE2E2':'#F9FAFB');
+  const cTx=s=>s>0?'#166534':(s<0?'#991B1B':'#6B7280');
+  const cD=(val,sign,isM)=>{const bg=cBg(sign),c=cTx(sign),pfx=sign>0?'+':(sign<0?'-':'');const f=isM?'$'+Math.round(Math.abs(val)).toLocaleString('en-US'):Math.round(Math.abs(val)).toLocaleString('en-US');return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+(val===0?'—':pfx+f)+'</td>';};
+  const cP=(pct,isPp)=>{if(pct==null)return '<td style="padding:5px 8px;background:#F9FAFB;color:#9CA3AF;text-align:right;font-size:11px">—</td>';const bg=cBg(pct),c=cTx(pct),suf=isPp?'pp':'%',pfx=pct>=0?'+':'';return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+pfx+pct.toFixed(2)+suf+'</td>';};
+  const trRow=(label,v,dv,dvp,o,do_,dop,aov,daovp,mkd,dmkdpp)=>'<tr style="border-bottom:1px solid #F3F4F6">'+
+    '<td style="padding:5px 8px;font-weight:700;color:#1A1A2E;font-size:11px">'+label+'</td>'+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+Math.round(v).toLocaleString('en-US')+'</td>'+cD(dv,dv,true)+cP(dvp)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+Math.round(o).toLocaleString('en-US')+'</td>'+cD(do_,do_,false)+cP(dop)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+aov.toFixed(1)+'</td>'+cP(daovp)+
+    '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+mkd.toFixed(2)+'%</td>'+cP(dmkdpp,true)+'</tr>';
+  const THm=h=>'<th style="padding:6px 8px;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:'+(h==='Mes'||h==='Semana'?'left':'right')+'">'+h+'</th>';
+  const THw=h=>'<th style="padding:6px 8px;background:#EFF6FF;color:#1E40AF;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:'+(h==='Semana'?'left':'right')+'">'+h+'</th>';
+  const COLS=['Ventas','Δ$','Δ%','Órdenes','Δ','Δ%','AOV','AOV Δ%','MKD Ally %','MKD Δ pp'];
+  if(mDiv){
+    const map=_getMonthlyMap(), mKeys=Object.keys(map).sort();
+    const N_M=6, mStart=Math.max(0,mKeys.length-N_M);
+    let html='<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:14px"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📅 Tendencia mensual por KAM (últimos 6 meses)</div>';
+    for(const {lider,kam} of kamsToRender){
+      const md=_monthlyAggKam(lider,kam); if(!md||!md.labels.length) continue;
+      html+='<div style="margin-bottom:14px;border-left:4px solid #fe663d;padding-left:10px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:6px">👤 '+kam+'</div>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+['Mes',...COLS].map(THm).join('')+'</tr></thead><tbody>';
+      const lLen=md.labels.length, lStart=Math.max(0,lLen-N_M);
+      for(let mi=lLen-1;mi>=lStart;mi--){
+        const v=md.ventas[mi]||0,o=md.ordenes[mi]||0,mkd=md.mkd_ally[mi]||0,aov=o>0?v/o:0;
+        const pv=mi>0?md.ventas[mi-1]||0:0,po=mi>0?md.ordenes[mi-1]||0:0,pmkd=mi>0?md.mkd_ally[mi-1]||0:0,paov=po>0?pv/po:0;
+        html+=trRow(md.labels[mi],v,v-pv,pv>0?(v-pv)/pv*100:null,o,o-po,po>0?(o-po)/po*100:null,aov,paov>0?(aov-paov)/paov*100:null,mkd,mkd-pmkd);
+      }
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';
+    mDiv.innerHTML=html;
+  }
+  if(wDiv){
+    const aw=DATA.all_weeks, wkLen=WL.length, N_WKS=6, startWk=Math.max(0,wkLen-N_WKS);
+    const fmtW=w=>{const p=w.split('-');return p.length<3?w:parseInt(p[2])+'/'+p[1]+'/'+p[0];};
+    let html='<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:14px"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📆 Tendencia semanal por KAM (últimas 6 semanas)</div>';
+    for(const {lider,kam} of kamsToRender){
+      const kd=DATA.kam_trends[lider]?.[kam]; if(!kd) continue;
+      html+='<div style="margin-bottom:14px;border-left:4px solid #3B82F6;padding-left:10px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:6px">👤 '+kam+'</div>';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+['Semana',...COLS].map(THw).join('')+'</tr></thead><tbody>';
+      for(let wi=wkLen-1;wi>=startWk;wi--){
+        const v=kd.ventas?.[wi]||0,o=kd.ordenes?.[wi]||0,mkd=kd.mkd_ally?.[wi]||0,aov=o>0?v/o:0;
+        const pv=wi>0?kd.ventas?.[wi-1]||0:0,po=wi>0?kd.ordenes?.[wi-1]||0:0,pmkd=wi>0?kd.mkd_ally?.[wi-1]||0:0,paov=po>0?pv/po:0;
+        html+=trRow(fmtW(aw[wi]||''),v,v-pv,pv>0?(v-pv)/pv*100:null,o,o-po,po>0?(o-po)/po*100:null,aov,paov>0?(aov-paov)/paov*100:null,mkd,mkd-pmkd);
+      }
+      html+='</tbody></table></div>';
+    }
+    html+='</div>';
+    wDiv.innerHTML=html;
+  }
 }
 
 let kamSort='ventas',kamAsc=false,kamPage=1;
@@ -2395,6 +2533,7 @@ function renderKamTable(){
     </tr>`;
   }).join('');
   renderPag('kamPag',pages,kamPage,p=>{kamPage=p;renderKamTable();});
+  _renderKamTrendTables();
 }
 
 // ── TENDENCIAS ─────────────────────────────────────────────────────
@@ -2606,6 +2745,43 @@ function renderTendencias(){
     html+='</tbody></table></div>';
     // disabled - reemplazado por desglose mensual arriba
     } // end if(false)
+  }
+
+  // === KAM — Desglose Semanal (últimas 6 semanas) ===
+  const kamWkDiv = document.getElementById('kamWeeklyTable');
+  if(kamWkDiv){
+    if(!kamsToShow.length){ kamWkDiv.innerHTML=''; }
+    else {
+      const N_WKS=6, wkLen=WL.length, startWk=Math.max(0,wkLen-N_WKS);
+      const aw=DATA.all_weeks;
+      const fmtW=w=>{const p=w.split('-');return p.length<3?w:parseInt(p[2])+'/'+p[1]+'/'+p[0];};
+      const cBg=s=>s>0?'#DCFCE7':(s<0?'#FEE2E2':'#F9FAFB');
+      const cTx=s=>s>0?'#166534':(s<0?'#991B1B':'#6B7280');
+      const cD=(val,sign,isM)=>{const bg=cBg(sign),c=cTx(sign),pfx=sign>0?'+':(sign<0?'-':'');const f=isM?'$'+Math.round(Math.abs(val)).toLocaleString('en-US'):Math.round(Math.abs(val)).toLocaleString('en-US');return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+(val===0?'—':pfx+f)+'</td>';};
+      const cP=(pct,isPp)=>{if(pct==null)return '<td style="padding:5px 8px;background:#F9FAFB;color:#9CA3AF;text-align:right;font-size:11px">—</td>';const bg=cBg(pct),c=cTx(pct),suf=isPp?'pp':'%',pfx=pct>=0?'+':'';return '<td style="padding:5px 8px;background:'+bg+';color:'+c+';font-weight:700;font-size:11px;text-align:right">'+pfx+pct.toFixed(2)+suf+'</td>';};
+      const TH=h=>'<th style="padding:6px 8px;background:#EFF6FF;color:#1E40AF;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:'+(h==='Semana'?'left':'right')+'">'+h+'</th>';
+      const thead='<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:Nunito,sans-serif"><thead><tr>'+['Semana','Ventas','Δ$','Δ%','Órdenes','Δ','Δ%','AOV','AOV Δ%','CVR%','MKD Ally %','MKD Δ pp'].map(TH).join('')+'</tr></thead><tbody>';
+      let wHtml='<div style="background:#fff;border-radius:14px;padding:14px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto;margin-bottom:14px"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:8px;letter-spacing:-.2px">📆 Desglose semanal por KAM (últimas '+N_WKS+' semanas)</div>';
+      for(const {lider,kam} of kamsToShow){
+        const kd=DATA.kam_trends[lider]?.[kam]; if(!kd) continue;
+        wHtml+='<div style="margin-bottom:14px;border-left:4px solid #3B82F6;padding-left:10px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:6px">👤 '+kam+'</div>'+thead;
+        for(let wi=wkLen-1;wi>=startWk;wi--){
+          const v=kd.ventas?.[wi]||0,o=kd.ordenes?.[wi]||0,t=kd.trafico?.[wi]||0,mkd=kd.mkd_ally?.[wi]||0;
+          const aov=o>0?v/o:0,cvr=t>0?o/t*100:0;
+          const pv=wi>0?kd.ventas?.[wi-1]||0:0,po=wi>0?kd.ordenes?.[wi-1]||0:0,pmkd=wi>0?kd.mkd_ally?.[wi-1]||0:0,paov=po>0?pv/po:0;
+          const dv=v-pv,dvp=pv>0?(v-pv)/pv*100:null,do_=o-po,dop=po>0?(o-po)/po*100:null,daovp=paov>0?(aov-paov)/paov*100:null,dmkdpp=mkd-pmkd;
+          wHtml+='<tr style="border-bottom:1px solid #F3F4F6"><td style="padding:5px 8px;font-weight:700;color:#1A1A2E;font-size:11px">'+fmtW(aw[wi]||WL[wi]||'')+'</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+Math.round(v).toLocaleString('en-US')+'</td>'+cD(dv,dv,true)+cP(dvp)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+Math.round(o).toLocaleString('en-US')+'</td>'+cD(do_,do_,false)+cP(dop)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">$'+aov.toFixed(1)+'</td>'+cP(daovp)+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+cvr.toFixed(2)+'%</td>'+
+            '<td style="padding:5px 8px;text-align:right;color:#374151;font-size:11px">'+mkd.toFixed(2)+'%</td>'+cP(dmkdpp,true)+'</tr>';
+        }
+        wHtml+='</tbody></table></div>';
+      }
+      wHtml+='</div>';
+      kamWkDiv.innerHTML=wHtml;
+    }
   }
 }
 

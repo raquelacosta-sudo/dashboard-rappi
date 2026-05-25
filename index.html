@@ -1118,7 +1118,7 @@ async function _buildDataFromSheet() {
     const r26=sliceAgg(brand,w26), r25=sliceAgg(brand,w25);
     const r4=sliceAgg(brand,l4w),  rp4=sliceAgg(brand,p4w);
     return {
-      marca:brand, lider:meta.lider, kam:meta.kam, kam_email:(meta.kam_email||meta.kam||'').toLowerCase(),
+      marca:brand, lider:meta.lider, kam:meta.kam, kam_email:(()=>{const e=(meta.kam_email||'').toLowerCase().trim();return e||((meta.kam||'').toLowerCase().replace(/\s+/g,'.')+'@rappi.com');})(),
       gmv_lw:lw_v, gmv_pw:pw_v, delta_lw:pct(lw_v,pw_v),
       gmv_l4w:r4.gmv, gmv_p4w:rp4.gmv, delta_l4w:pct(r4.gmv,rp4.gmv),
       gmv_ytd_26:r26.gmv, gmv_ytd_25:r25.gmv, delta_ytd:pct(r26.gmv,r25.gmv),
@@ -3952,7 +3952,7 @@ function _populateCaidasKams(){
   // Use email as value (matches callout_brands.kam) and display name as label
   const kamPairs=DATA.kam_rows
     .filter(r=>!liderF||r.lider===liderF)
-    .map(r=>({val:r.email||r.kam.toLowerCase().replace(/ /g,'.')+'@rappi.com', label:r.kam}))
+    .map(r=>({val:(r.email||'').trim()||(r.kam||'').toLowerCase().replace(/\s+/g,'.')+'@rappi.com', label:r.kam}))
     .sort((a,b)=>a.label.localeCompare(b.label));
   // Dedup by val
   const seen=new Set();

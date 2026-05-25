@@ -5580,276 +5580,90 @@ async function renderSWAT(){
     const nYTD=w26.length;
     const w25=allWeeks.filter(w=>w.startsWith('2025')).slice(0,nYTD);
 
-    function sum(brand,weeks,metric){ return weeks.reduce((s,w)=>s+(bw[brand]?.[w]?.[metric]||0),0); }
-    function pct(a,b){ return b ? (a-b)/b*100 : null; }
-    function fmt(n){ if(n>=1e6) return '$'+(n/1e6).toFixed(1)+'M'; if(n>=1e3) return '$'+(n/1e3).toFixed(0)+'K'; return '$'+n.toFixed(0); }
-    function arw(p,suffix=''){
-      if(p===null) return '<span style="color:#9CA3AF">—</span>';
-      const c=p>=0?'#22C55E':'#EF4444', s=p>=0?'▲':'▼';
-      return `<span style="color:${c};font-weight:700">${s} ${Math.abs(p).toFixed(1)}%${suffix}</span>`;
+    function sum(brand,weeks,metric){ return weeks.reduce((acc + ((bw[brand]?.[wk]?.[metric]) || 0), 0); }
+
+    // Build brand summary
+    const SWAT_COLORS = {
+      'Hooters':'#FF6B35','Hooters (BC)':'#FF8C5A','Cancino':'#7C3AED',
+      'Lucky Sushi':'#DC2626','Sushi Shop Teikit':'#1D4ED8',
+      'Tierra Garat':'#059669','Maison Kayser':'#B45309'
+    };
+    const brands = Object.keys(bw).sort();
+    const brandSummary = brands.map(b => {
+      const gmv26 = sum(b, w26, 'gmv'), ord26 = sum(b, w26, 'orders');
+      const gmv25 = sum(b, w25, 'gmv'), ord25 = sum(b, w25, 'orders');
+      const aov26 = ord26 > 0 ? gmv26 / ord26 : 0;
+      const aov25 = ord25 > 0 ? gmv25 / ord25 : 0;
+      return { name: b, gmv26, ord26, gmv25, ord25, aov26, aov25 };
+    }).sort((a,b) => b.gmv26 - a.gmv26);
+
+    if (!brandSummary.length) {
+      container.innerHTML = '<div style="padding:20px;color:#9CA3AF">Sin datos en el tab SWAT.</div>';
+      return;
     }
 
-    const COLORS={'Hooters':'#FF6B35','Cancino':'#7C3AED','Lucky Sushi':'#DC2626',
-      'Sushi Shop Teikit':'#1D4ED8','Tierra Garat':'#059669','Maison Kayser':'#B45309'};
+    const fmtM = v => '$' + (v/1e6).toFixed(2) + 'M';
+    const fmtK = v => v >= 1e3 ? (v/1e3).toFixed(0) + 'K' : String(Math.round(v));
+    const pct = (a,b) => b > 0 ? ((a-b)/b*100) : null;
+    const varChip = (d) => {
+      if (d == null) return '';
+      const c = d >= 0 ? '#166534' : '#991B1B', bg = d >= 0 ? '#DCFCE7' : '#FEE2E2';
+      return `<span style="background:${bg};color:${c};border-radius:4px;padding:1px 5px;font-size:10px;font-weight:700">${d>=0?'+':''}${d.toFixed(1)}%</span>`;
+    };
 
-    const brands=Object.keys(bw).sort();
-
-    // ── Tarjetas por marca ─────────────────────────────────────────────────────
-    let cards='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px;margin-bottom:24px">';
-    brands.forEach(brand=>{
-      const color=COLORS[brand]||'#6B7280';
-      const lw=bw[brand]?.[lastWk]||{}, pw=bw[brand]?.[prevWk]||{};
-      const lw_gmv=lw.gmv||0, pw_gmv=pw.gmv||0;
-      const lw_ord=lw.orders||0, lw_sst=lw.sst||0;
-      const lw_aov=lw_ord>0?lw_gmv/lw_ord:0;
-      const lw_cvr=lw_sst>0?lw_ord/lw_sst*100:0;
-      const lw_mkd=lw_gmv>0?(lw.mkd||0)/lw_gmv*100:0;
-      const ytd26=sum(brand,w26,'gmv'), ytd25=sum(brand,w25,'gmv');
-      const ytd26_o=sum(brand,w26,'orders'), ytd25_o=sum(brand,w25,'orders');
-      cards+=`
-      <div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;border-top:4px solid ${color};padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
-        <div style="font-size:14px;font-weight:800;color:#1F2937;margin-bottom:12px">${brand}</div>
+    // Cards
+    let html = '<div style="font-size:16px;font-weight:900;color:#1A1A2E;margin-bottom:16px;letter-spacing:-.5px">🎯 SWAT Brands — Seguimiento YoY</div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-bottom:24px">';
+    brandSummary.forEach(b => {
+      const col = SWAT_COLORS[b.name] || '#6B7280';
+      html += `<div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #F3F4F6;border-top:4px solid ${col};box-shadow:0 2px 10px rgba(0,0,0,.06)">
+        <div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:10px;border-bottom:1px solid #F3F4F6;padding-bottom:8px">${b.name}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">Ventas LW</div>
-            <div style="font-size:17px;font-weight:800;color:#111827">${fmt(lw_gmv)}</div>
-            <div style="font-size:11px;margin-top:2px">${arw(pct(lw_gmv,pw_gmv))} vs ant</div>
-          </div>
-          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">YTD 2026</div>
-            <div style="font-size:17px;font-weight:800;color:#111827">${fmt(ytd26)}</div>
-            <div style="font-size:11px;margin-top:2px">${arw(pct(ytd26,ytd25))} YoY</div>
-          </div>
-          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">Órdenes LW</div>
-            <div style="font-size:16px;font-weight:800;color:#111827">${lw_ord.toLocaleString()}</div>
-            <div style="font-size:11px;margin-top:2px">${arw(pct(ytd26_o,ytd25_o))} YTD YoY</div>
-          </div>
-          <div style="background:#F9FAFB;border-radius:8px;padding:10px">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#9CA3AF;margin-bottom:3px">AOV · CVR · MKD</div>
-            <div style="font-size:13px;font-weight:800;color:#111827">$${lw_aov.toFixed(0)} · ${lw_cvr.toFixed(1)}%</div>
-            <div style="font-size:11px;color:#6B7280;margin-top:2px">MKD ally: ${lw_mkd.toFixed(1)}%</div>
-          </div>
+          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV 2025</div><div style="font-size:15px;font-weight:900;color:#374151">${fmtM(b.gmv25)}</div></div>
+          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">GMV 2026</div><div style="font-size:15px;font-weight:900;color:${col}">${fmtM(b.gmv26)}</div><div style="margin-top:2px">${varChip(pct(b.gmv26,b.gmv25))}</div></div>
+          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Órdenes 2025</div><div style="font-size:13px;font-weight:700;color:#374151">${fmtK(b.ord25)}</div></div>
+          <div><div style="font-size:9px;color:#9CA3AF;font-weight:700;text-transform:uppercase">Órdenes 2026</div><div style="font-size:13px;font-weight:700;color:${col}">${fmtK(b.ord26)}</div><div style="margin-top:2px">${varChip(pct(b.ord26,b.ord25))}</div></div>
         </div>
       </div>`;
     });
-    cards+='</div>';
+    html += '</div>';
 
-    // ── Tabla YoY resumen ──────────────────────────────────────────────────────
-    let tbl=`<div style="background:#fff;border-radius:14px;border:1px solid #E5E7EB;padding:16px">
-      <div style="font-size:14px;font-weight:700;color:#1F2937;margin-bottom:12px">📊 Comparativo YoY — YTD ${new Date().getFullYear()} (${nYTD} semanas)</div>
-      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="background:#F3F4F6">
-        <th style="padding:8px 12px;text-align:left;font-weight:700;color:#374151">Marca</th>
-        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YTD 2025</th>
-        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YTD 2026</th>
-        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">YoY %</th>
-        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">Ords YoY</th>
-        <th style="padding:8px 12px;text-align:right;font-weight:700;color:#374151">Ventas LW</th>
-      </tr></thead><tbody>`;
-    brands.forEach((brand,i)=>{
-      const ytd26=sum(brand,w26,'gmv'), ytd25=sum(brand,w25,'gmv');
-      const ytd26_o=sum(brand,w26,'orders'), ytd25_o=sum(brand,w25,'orders');
-      const yg=pct(ytd26,ytd25), yo=pct(ytd26_o,ytd25_o);
-      const lw_gmv=bw[brand]?.[lastWk]?.gmv||0;
-      const gc=yg!==null&&yg>=0?'#22C55E':'#EF4444';
-      const oc=yo!==null&&yo>=0?'#22C55E':'#EF4444';
-      tbl+=`<tr style="background:${i%2?'#F9FAFB':'#fff'}">
-        <td style="padding:8px 12px;font-weight:600;color:#111827">${brand}</td>
-        <td style="padding:8px 12px;text-align:right;color:#374151">${fmt(ytd25)}</td>
-        <td style="padding:8px 12px;text-align:right;color:#374151">${fmt(ytd26)}</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:700;color:${gc}">${yg!==null?(yg>=0?'+':'')+yg.toFixed(1)+'%':'—'}</td>
-        <td style="padding:8px 12px;text-align:right;font-weight:700;color:${oc}">${yo!==null?(yo>=0?'+':'')+yo.toFixed(1)+'%':'—'}</td>
-        <td style="padding:8px 12px;text-align:right">${fmt(lw_gmv)}</td>
+    // Summary table
+    html += '<div style="background:#fff;border-radius:14px;padding:16px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow-x:auto"><div style="font-size:13px;font-weight:900;color:#1A1A2E;margin-bottom:10px">📋 Resumen comparativo YoY (YTD equivalente)</div>';
+    html += '<table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>' +
+      ['Marca','GMV 2025','GMV 2026','Δ GMV%','Órd 2025','Órd 2026','Δ Órd%','AOV 2025','AOV 2026']
+      .map(h => `<th style="padding:6px 8px;background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;text-align:${h==='Marca'?'left':'right'}">${h}</th>`).join('') +
+      '</tr></thead><tbody>';
+    brandSummary.forEach((b, i) => {
+      const col = SWAT_COLORS[b.name] || '#6B7280';
+      const dg = pct(b.gmv26, b.gmv25), do_ = pct(b.ord26, b.ord25);
+      const bgRow = i % 2 === 0 ? '#FAFAFA' : '#fff';
+      const vc = (d) => {
+        if(d==null) return '<td style="text-align:right;padding:5px 8px;color:#9CA3AF">—</td>';
+        const c=d>=0?'#166534':'#991B1B', bg=d>=0?'#DCFCE7':'#FEE2E2';
+        return `<td style="text-align:right;padding:5px 8px;background:${bg};color:${c};font-weight:700;font-size:10px">${d>=0?'+':''}${d.toFixed(1)}%</td>`;
+      };
+      html += `<tr style="background:${bgRow};border-bottom:1px solid #F3F4F6">
+        <td style="padding:5px 8px;font-weight:700;color:#1A1A2E;border-left:3px solid ${col}">${b.name}</td>
+        <td style="padding:5px 8px;text-align:right;color:#374151">${fmtM(b.gmv25)}</td>
+        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">${fmtM(b.gmv26)}</td>
+        ${vc(dg)}
+        <td style="padding:5px 8px;text-align:right;color:#374151">${fmtK(b.ord25)}</td>
+        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">${fmtK(b.ord26)}</td>
+        ${vc(do_)}
+        <td style="padding:5px 8px;text-align:right;color:#374151">$${b.aov25.toFixed(0)}</td>
+        <td style="padding:5px 8px;text-align:right;color:${col};font-weight:700">$${b.aov26.toFixed(0)}</td>
       </tr>`;
     });
-    tbl+='</tbody></table></div></div>';
+    html += '</tbody></table></div>';
 
-    // Fecha formato bonito
-    const [yy,mm,dd]=lastWk.split('-').map(Number);
-    const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-    const lastWkFmt=`${dd} ${meses[mm-1]} ${yy}`;
+    container.innerHTML = html;
+    container.dataset.loaded = '1';
 
-    container.innerHTML=`
-      <div style="display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
-        <h2 style="margin:0;font-size:18px;font-weight:800;color:#1F2937">🎯 SWAT Brands</h2>
-        <span style="font-size:12px;color:#6B7280;background:#F3F4F6;padding:3px 10px;border-radius:20px">Última semana: ${lastWkFmt} · YTD: ${nYTD} semanas vs 2025</span>
-        <button onclick="document.getElementById('swat-dashboard').dataset.loaded='';renderSWAT()"
-          style="margin-left:auto;background:#F3F4F6;border:none;border-radius:8px;padding:5px 12px;font-size:11px;cursor:pointer;color:#374151">↺ Actualizar</button>
-      </div>
-      ${cards}${tbl}`;
-    container.dataset.loaded='1';
-  } catch(e){
-    container.innerHTML=`<div style="background:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:16px;color:#DC2626;font-size:13px">⚠️ Error cargando SWAT: ${e.message}</div>`;
+  } catch(e) {
+    container.innerHTML = '<div style="padding:20px;color:#EF4444;font-size:12px">❌ Error cargando SWAT: ' + e.message + '</div>';
   }
 }
+</script>
 
-// YoY por CARTERA COMERCIAL
-// ============================================================
-window._yoyCarteraExpanded = {};
-
-function renderYoYCartera(){
-  const cont = document.getElementById('yoyCarteraContent');
-  if(!cont) return;
-  
-  // Aggregate by líder
-  const lideres = {};
-  for(const cb of (DATA.callout_brands || [])){
-    if(!lideres[cb.lider]) lideres[cb.lider] = {
-      lider: cb.lider, kams: {},
-      gmv26:0, gmv25:0, ord26:0, ord25:0, traf26:0, traf25:0, rev26:0, rev25:0, brands_count:0
-    };
-    const L = lideres[cb.lider];
-    L.gmv26 += cb.gmv_ytd_26 || 0; L.gmv25 += cb.gmv_ytd_25 || 0;
-    L.ord26 += cb.ord_26 || 0; L.ord25 += cb.ord_25 || 0;
-    L.traf26 += cb.traf_26 || 0; L.traf25 += cb.traf_25 || 0;
-    L.rev26 += cb.rev_26 || 0; L.rev25 += cb.rev_25 || 0;
-    L.brands_count++;
-    if(!L.kams[cb.kam]) L.kams[cb.kam] = {
-      kam: cb.kam, gmv26:0, gmv25:0, ord26:0, ord25:0, traf26:0, traf25:0, rev26:0, rev25:0, brands:[]
-    };
-    const K = L.kams[cb.kam];
-    K.gmv26 += cb.gmv_ytd_26 || 0; K.gmv25 += cb.gmv_ytd_25 || 0;
-    K.ord26 += cb.ord_26 || 0; K.ord25 += cb.ord_25 || 0;
-    K.traf26 += cb.traf_26 || 0; K.traf25 += cb.traf_25 || 0;
-    K.rev26 += cb.rev_26 || 0; K.rev25 += cb.rev_25 || 0;
-    K.brands.push(cb);
-  }
-  
-  const liderArr = Object.values(lideres);
-  // Sort by GMV YTD 2026 desc
-  liderArr.sort((a,b)=>b.gmv26-a.gmv26);
-  
-  const fM = v => '$' + (Math.abs(v)/1e6).toFixed(2) + 'M';
-  const fK = v => '$' + (Math.abs(v)/1e3).toFixed(0) + 'K';
-  const fN = v => v >= 1e6 ? (v/1e6).toFixed(2)+'M' : (v >= 1e3 ? (v/1e3).toFixed(0)+'K' : Math.round(v));
-  const pct = (a,b) => b > 0 ? (a-b)/b*100 : null;
-  const fmtD = (d, isPp) => {
-    if(d == null || isNaN(d)) return '<span style="color:#9CA3AF">—</span>';
-    const c = d >= 0 ? '#166534' : '#991B1B';
-    const bg = d >= 0 ? '#DCFCE7' : '#FEE2E2';
-    const arr = d >= 0 ? '▲' : '▼';
-    const suf = isPp ? 'pp' : '%';
-    return '<span style="color:'+c+';background:'+bg+';padding:2px 6px;border-radius:4px;font-weight:800;font-size:11px">'+arr+' '+Math.abs(d).toFixed(1)+suf+'</span>';
-  };
-  
-  const LSname = (l) => (typeof LS !== 'undefined' && LS[l]) || l.split('@')[0];
-  
-  let html = '';
-  
-  for(const L of liderArr){
-    const lid = L.lider.replace(/[^a-z0-9]/g,'_');
-    const dGmv = pct(L.gmv26, L.gmv25);
-    const dOrd = pct(L.ord26, L.ord25);
-    const dTraf = pct(L.traf26, L.traf25);
-    const dRev = pct(L.rev26, L.rev25);
-    const aov26 = L.ord26 > 0 ? L.gmv26/L.ord26 : 0;
-    const aov25 = L.ord25 > 0 ? L.gmv25/L.ord25 : 0;
-    const dAov = pct(aov26, aov25);
-    const expanded = window._yoyCarteraExpanded[L.lider] !== false; // default expanded
-    
-    // Top drivers caída/crecimiento
-    const allBrands = [];
-    for(const K of Object.values(L.kams)){
-      for(const b of K.brands){
-        if(b.gmv_ytd_25 > 0){
-          allBrands.push({
-            marca: b.marca, kam: b.kam,
-            delta_abs: (b.gmv_ytd_26||0) - (b.gmv_ytd_25||0),
-            delta_pct: pct(b.gmv_ytd_26, b.gmv_ytd_25),
-            gmv26: b.gmv_ytd_26||0, gmv25: b.gmv_ytd_25||0
-          });
-        }
-      }
-    }
-    const topUp = allBrands.filter(x=>x.delta_abs>0).sort((a,b)=>b.delta_abs-a.delta_abs).slice(0,5);
-    const topDown = allBrands.filter(x=>x.delta_abs<0).sort((a,b)=>a.delta_abs-b.delta_abs).slice(0,5);
-    
-    const headerColor = dGmv == null ? '#9CA3AF' : (dGmv >= 0 ? '#fe663d' : '#ff3d55');
-    
-    html += '<div style="background:#fff;border-radius:14px;margin-bottom:18px;border:1px solid #FFE6DD;box-shadow:0 2px 10px rgba(0,0,0,.06);overflow:hidden">';
-    
-    // Header del líder (clickeable para expandir)
-    html += '<div onclick="toggleYoYLider(this.dataset.lider)" data-lider="' + L.lider + '" style="background:linear-gradient(-45deg,#fe663d,#ff3d55);color:#fff;padding:14px 20px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">';
-    html += '<div><div style="font-size:16px;font-weight:900;letter-spacing:-.3px">'+LSname(L.lider)+'</div>';
-    html += '<div style="font-size:11px;opacity:.9;margin-top:2px">'+Object.keys(L.kams).length+' KAMs · '+L.brands_count+' marcas</div></div>';
-    html += '<div style="font-size:13px;font-weight:800">'+(expanded?'▼':'▶')+'</div></div>';
-    
-    // KPIs del líder
-    html += '<div style="padding:16px 20px;background:#FFF8F2;display:grid;grid-template-columns:repeat(5,1fr);gap:10px;border-bottom:1px solid #FFE6DD">';
-    html += '<div><div style="font-size:10px;color:#9CA3AF;font-weight:800;text-transform:uppercase">GMV YTD</div><div style="font-size:18px;font-weight:900;color:#1A1A2E;margin:2px 0">'+fM(L.gmv26)+'</div>'+fmtD(dGmv)+'<div style="font-size:9px;color:#9CA3AF;margin-top:3px">vs '+fM(L.gmv25)+' 2025</div></div>';
-    html += '<div><div style="font-size:10px;color:#9CA3AF;font-weight:800;text-transform:uppercase">Órdenes</div><div style="font-size:18px;font-weight:900;color:#1A1A2E;margin:2px 0">'+fN(L.ord26)+'</div>'+fmtD(dOrd)+'</div>';
-    html += '<div><div style="font-size:10px;color:#9CA3AF;font-weight:800;text-transform:uppercase">AOV</div><div style="font-size:18px;font-weight:900;color:#1A1A2E;margin:2px 0">$'+aov26.toFixed(2)+'</div>'+fmtD(dAov)+'</div>';
-    html += '<div><div style="font-size:10px;color:#9CA3AF;font-weight:800;text-transform:uppercase">Tráfico</div><div style="font-size:18px;font-weight:900;color:#1A1A2E;margin:2px 0">'+fN(L.traf26)+'</div>'+fmtD(dTraf)+'</div>';
-    html += '<div><div style="font-size:10px;color:#9CA3AF;font-weight:800;text-transform:uppercase">Revenue Ads</div><div style="font-size:18px;font-weight:900;color:#1A1A2E;margin:2px 0">'+fK(L.rev26)+'</div>'+fmtD(dRev)+'</div>';
-    html += '</div>';
-    
-    // Drivers principales (top crece + top cae)
-    html += '<div style="padding:14px 20px;display:grid;grid-template-columns:1fr 1fr;gap:14px;border-bottom:'+(expanded?'1px solid #FFE6DD':'none')+'">';
-    
-    // Top crece
-    html += '<div style="background:linear-gradient(135deg,#fff,#DCFCE7);border-radius:10px;padding:12px;border-left:4px solid #166534">';
-    html += '<div style="font-size:11px;font-weight:800;color:#166534;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟢 Top drivers de crecimiento</div>';
-    if(topUp.length){
-      html += '<ul style="margin:0;padding-left:18px;font-size:11px;line-height:1.6">';
-      for(const b of topUp){
-        html += '<li><strong>'+b.marca+'</strong> ('+b.kam+'): +'+fM(b.delta_abs)+' '+fmtD(b.delta_pct)+'</li>';
-      }
-      html += '</ul>';
-    } else {
-      html += '<div style="font-size:11px;color:#9CA3AF">— sin marcas creciendo en este líder —</div>';
-    }
-    html += '</div>';
-    
-    // Top cae
-    html += '<div style="background:linear-gradient(135deg,#fff,#FEE2E2);border-radius:10px;padding:12px;border-left:4px solid #991B1B">';
-    html += '<div style="font-size:11px;font-weight:800;color:#991B1B;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔴 Top drivers de caída</div>';
-    if(topDown.length){
-      html += '<ul style="margin:0;padding-left:18px;font-size:11px;line-height:1.6">';
-      for(const b of topDown){
-        html += '<li><strong>'+b.marca+'</strong> ('+b.kam+'): '+fM(b.delta_abs)+' '+fmtD(b.delta_pct)+'</li>';
-      }
-      html += '</ul>';
-    } else {
-      html += '<div style="font-size:11px;color:#9CA3AF">— sin caídas significativas —</div>';
-    }
-    html += '</div>';
-    html += '</div>';
-    
-    // KAMs detalle (expandido)
-    if(expanded){
-      const kamsArr = Object.values(L.kams).sort((a,b)=>b.gmv26-a.gmv26);
-      html += '<div style="padding:14px 20px"><div style="font-size:12px;font-weight:900;color:#1A1A2E;margin-bottom:10px;letter-spacing:-.2px">👥 Comerciales (KAMs)</div>';
-      html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px"><thead><tr>';
-      const hdrs = ['KAM','Marcas','GMV YTD','Δ%','Órdenes','Δ%','Tráfico','Δ%','Top crece','Top cae'];
-      for(const h of hdrs){
-        html += '<th style="padding:6px 8px;text-align:'+(h==='KAM'||h.startsWith('Top')?'left':'right')+';background:#fff0dd;color:#633D11;font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.5px">'+h+'</th>';
-      }
-      html += '</tr></thead><tbody>';
-      
-      for(const K of kamsArr){
-        const dK_gmv = pct(K.gmv26, K.gmv25);
-        const dK_ord = pct(K.ord26, K.ord25);
-        const dK_tra = pct(K.traf26, K.traf25);
-        const kBrands = K.brands.filter(b=>b.gmv_ytd_25>0);
-        const kUp = kBrands.filter(b=>(b.gmv_ytd_26||0)>(b.gmv_ytd_25||0))
-          .sort((a,b)=>((b.gmv_ytd_26||0)-(b.gmv_ytd_25||0))-((a.gmv_ytd_26||0)-(a.gmv_ytd_25||0)))[0];
-        const kDown = kBrands.filter(b=>(b.gmv_ytd_26||0)<(b.gmv_ytd_25||0))
-          .sort((a,b)=>((a.gmv_ytd_26||0)-(a.gmv_ytd_25||0))-((b.gmv_ytd_26||0)-(b.gmv_ytd_25||0)))[0];
-        const topUpCell = kUp ? '<strong>'+kUp.marca+'</strong> <span style="color:#166534;font-weight:700">+'+fM((kUp.gmv_ytd_26||0)-(kUp.gmv_ytd_25||0))+'</span>' : '—';
-        const topDnCell = kDown ? '<strong>'+kDown.marca+'</strong> <span style="color:#991B1B;font-weight:700">'+fM((kDown.gmv_ytd_26||0)-(kDown.gmv_ytd_25||0))+'</span>' : '—';
-        const rowBg = dK_gmv == null ? '#fff' : (dK_gmv >= 5 ? '#F0FDF4' : (dK_gmv <= -5 ? '#FEF2F2' : '#fff'));
-        html += '<tr style="border-bottom:1px solid #F3F4F6;background:'+rowBg+'">';
-        html += '<td style="padding:7px 8px;font-weight:700;color:#1A1A2E">'+K.kam+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right;color:#374151">'+K.brands.length+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right;color:#374151;font-weight:700">'+fM(K.gmv26)+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right">'+fmtD(dK_gmv)+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right;color:#374151">'+fN(K.ord26)+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right">'+fmtD(dK_ord)+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right;color:#374151">'+fN(K.traf26)+'</td>';
-        html += '<td style="padding:7px 8px;text-align:right">'+fmtD(dK_tra)+'</td>';
-        html += '<td style="padding:7px 8px;font-size:10px;color:#1A1A2E">'+topUpCell+'</td>';
-        html += '<td style="padding:7px 8px;font-size:10px;color:#1A1A2E">'+topDnCell+'</td>';
-        html += '</tr>';
-      }
-      html += '</tbody></table></div></div>
+</body></html>

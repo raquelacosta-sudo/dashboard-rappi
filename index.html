@@ -906,9 +906,14 @@ async function _buildDataFromSheet() {
   );
   if (!rows.length) throw new Error(`Sin filas en el tab "${_SHEET_TAB}" después de filtros.`);
 
-  // all_weeks: closed weeks sorted (WEEK_DATE col, already YYYY-MM-DD text)
+  // all_weeks: solo semanas COMPLETAS (excluir semana en curso para evitar datos parciales)
   const todayStr = new Date().toISOString().slice(0,10);
-  const weekSet  = new Set(rows.filter(r => r.WEEK_DATE && r.WEEK_DATE < todayStr).map(r => r.WEEK_DATE));
+  // Calcular el lunes de la semana actual — cualquier semana >= ese lunes está en curso (incompleta)
+  const _td = new Date(); const _dow = _td.getDay();
+  const _daysFromMon = (_dow === 0) ? 6 : _dow - 1; // 0=lunes,...,6=domingo
+  const _thisMon = new Date(_td); _thisMon.setDate(_td.getDate() - _daysFromMon);
+  const _thisMondayStr = _thisMon.toISOString().slice(0,10);
+  const weekSet  = new Set(rows.filter(r => r.WEEK_DATE && r.WEEK_DATE < _thisMondayStr).map(r => r.WEEK_DATE));
   const all_weeks = [...weekSet].sort();
   const N = all_weeks.length;
   if (N < 4) throw new Error(`Solo ${N} semanas en el sheet.`);

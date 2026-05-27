@@ -906,13 +906,16 @@ async function _buildDataFromSheet() {
   );
   if (!rows.length) throw new Error(`Sin filas en el tab "${_SHEET_TAB}" después de filtros.`);
 
-  // all_weeks: solo semanas COMPLETAS (excluir semana en curso para evitar datos parciales)
-  const todayStr = new Date().toISOString().slice(0,10);
-  // Calcular el lunes de la semana actual — cualquier semana >= ese lunes está en curso (incompleta)
-  const _td = new Date(); const _dow = _td.getDay();
-  const _daysFromMon = (_dow === 0) ? 6 : _dow - 1; // 0=lunes,...,6=domingo
-  const _thisMon = new Date(_td); _thisMon.setDate(_td.getDate() - _daysFromMon);
-  const _thisMondayStr = _thisMon.toISOString().slice(0,10);
+  // all_weeks: solo semanas COMPLETAS (excluir semana en curso para evitar datos parciales de Aleph)
+  const _td = new Date();
+  const todayStr = `${_td.getFullYear()}-${String(_td.getMonth()+1).padStart(2,'0')}-${String(_td.getDate()).padStart(2,'0')}`;
+  // Lunes de esta semana en hora LOCAL (no UTC, para evitar bug de timezone en MX UTC-6)
+  const _dow = _td.getDay(); // 0=dom,1=lun,...,6=sab
+  const _daysFromMon = (_dow === 0) ? 6 : _dow - 1;
+  const _thisMon = new Date(_td.getFullYear(), _td.getMonth(), _td.getDate() - _daysFromMon);
+  const _pp = n => String(n).padStart(2,'0');
+  const _thisMondayStr = `${_thisMon.getFullYear()}-${_pp(_thisMon.getMonth()+1)}-${_pp(_thisMon.getDate())}`;
+  // Solo incluir semanas que cerraron antes del lunes de esta semana
   const weekSet  = new Set(rows.filter(r => r.WEEK_DATE && r.WEEK_DATE < _thisMondayStr).map(r => r.WEEK_DATE));
   const all_weeks = [...weekSet].sort();
   const N = all_weeks.length;

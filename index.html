@@ -298,6 +298,7 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
   <button class="tab" onclick="showTab('callouts',this)">📊 YTD Status</button>
       <button class="tab" onclick="showTab('yoy_cartera',this)">📁 YoY Cartera</button>
   <button class="tab" onclick="showTab('caidas',this)">🔍 Zooms Semanales</button>
+  <button class="tab" onclick="showTab('zooms_mensual',this)">📅 Zooms Mensuales</button>
   <button class="tab" onclick="showTab('ads',this)">📡 Ads & Forecast</button>
   
 <button class="tab" onclick="showTab('swat',this)">🎯 SWAT Brands</button>
@@ -705,6 +706,20 @@ footer{text-align:center;padding:14px;color:#9CA3AF;font-size:11px}
     <span id="caidasSyncStatus" style="font-size:11px;color:#6B7280"></span>
   </div>
   <div id="caidasTableWrap"></div>
+</div>
+
+<div id="tab-zooms_mensual" class="tab-content">
+  <h2 style="margin-bottom:16px;font-size:18px;font-weight:700;color:#1F2937">📅 Zooms Mensuales — MoM</h2>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:8px;padding:10px 14px">
+    <label style="font-size:13px;font-weight:600;color:#374151">Líder:</label>
+    <select id="zmLiderSel" onchange="zmOnLiderChange()" style="padding:6px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;background:#fff;min-width:160px"><option value="">Todos los Líderes</option></select>
+    <label style="font-size:13px;font-weight:600;color:#374151">KAM:</label>
+    <select id="zmKamSel" onchange="renderZoomsMensuales()" style="padding:6px 12px;border:1px solid #D1D5DB;border-radius:6px;font-size:13px;background:#fff;min-width:200px"><option value="">Todos los KAMs</option></select>
+    <span id="zmWeekLabel" style="font-size:12px;color:#6B7280;margin-left:auto"></span>
+    <span id="zmSyncStatus" style="font-size:11px;color:#059669;margin-left:8px"></span>
+    <button onclick="syncZoomsMensuales()" style="padding:6px 14px;background:#1F2937;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">↺ Sincronizar</button>
+  </div>
+  <div id="zmTableWrap"><p style="color:#9CA3AF;padding:16px;font-size:13px">Cargando datos mensuales...</p></div>
 </div>
 
 <div id="tab-ads" class="tab-content">
@@ -1256,6 +1271,46 @@ async function _buildDataFromSheet() {
   } catch(e) { console.warn('[Momentos] Tab data_momentos_prods no disponible:', e.message); }
   // ── END MOMENTOS ──────────────────────────────────────────────────────
 
+  // ── MENSUAL ────────────────────────────────────────────────────────────
+  let m_brand = {}, m_months = [];
+  try {
+    const mUrl = `https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent('data Mensual')}&t=${Date.now()}`;
+    const mRes = await fetch(mUrl);
+    const mRaw = await mRes.text();
+    if (mRaw && mRaw.length > 50 && !mRaw.trim().startsWith('<')) {
+      const mLines = mRaw.split('\n');
+      mLines.shift();
+      mLines.unshift(',FECHA,LIDER,KAM,BRAND_ID,MARCA,VENTAS,BOOKINGS_ADS,REVENUE_ADS,ORDENES,TRAFICO_SS,CANCELS,MARKDOWN,MKD_PRO,AOV,CVR_PCT,PCT_CANCELACIONES,PCT_MARKDOWN_ALLY,PCT_MARKDOWN_PRO_ALLY');
+      const mRows = _parseCSV(mLines.join('\n')).filter(r => r.FECHA && r.MARCA && +r.VENTAS >= 0);
+      const mmSet = new Set();
+      const _tnow = new Date();
+      const _curMonStr = `${_tnow.getFullYear()}-${String(_tnow.getMonth()+1).padStart(2,'0')}`;
+      mRows.forEach(r => {
+        const brand = (r.MARCA||'').trim();
+        const fecha = (r.FECHA||'').slice(0,10);
+        if (!brand || !fecha || fecha.slice(0,7) >= _curMonStr) return;
+        mmSet.add(fecha);
+        if (!m_brand[brand]) {
+          m_brand[brand] = {
+            lider:(r.LIDER||'').toLowerCase(), kam:(r.KAM||'').trim(),
+            kam_email:(()=>{const e=(r.KAM_EMAIL||'').toLowerCase().trim();return e||((r.KAM||'').toLowerCase().replace(/\s+/g,'.')+'@rappi.com');})(),
+            months:{}
+          };
+        }
+        m_brand[brand].months[fecha] = {
+          ventas:+r.VENTAS||0, ordenes:+r.ORDENES||0, trafico_ss:+r.TRAFICO_SS||0,
+          bookings_ads:+r.BOOKINGS_ADS||0, revenue_ads:+r.REVENUE_ADS||0,
+          aov:+r.AOV||0, cvr_pct:+r.CVR_PCT||0,
+          pct_cancelaciones:+r.PCT_CANCELACIONES||0,
+          pct_markdown_ally:+r.PCT_MARKDOWN_ALLY||0,
+          pct_markdown_pro_ally:+r.PCT_MARKDOWN_PRO_ALLY||0,
+        };
+      });
+      m_months = [...mmSet].sort();
+    }
+  } catch(e) { console.warn('[Mensual] Tab "data Mensual" no disponible:', e.message); }
+  // ── END MENSUAL ────────────────────────────────────────────────────────
+
   return {
     last_week_str:fmtWStr(lastWeek), prev_week_str:fmtWStr(prevWeek), alert_week_str:fmtWStr(lastWeek),
     all_weeks, totals:{ventas:tv,ordenes:to,semanas:N,marcas:brand_list.length},
@@ -1263,6 +1318,7 @@ async function _buildDataFromSheet() {
     kam_rows, kam_trends, alert_brands, insights, brand_list, brand_meta, brand_data, callout_brands,
     daypart_brands:{}, daypart_products:daypart_products_data, daypart_summary:{},
     momentos_order:momentos_order, momentos_pivot:momentos_pivot_data, momentos_global:momentos_global_data, momentos_lideres:momentos_lideres_data,
+    m_brand, m_months,
   };
 }
 
@@ -1381,6 +1437,7 @@ function showTab(id,btn){
   if(id==='alertas_mes') initAlertasMes();
   if(id==='kam_reports') initKamReportes();
   if(id==='zoom_mes') initZoomMes();
+  if(id==='zooms_mensual') initZoomsMensuales();
   if(id==='swat'){ renderSWAT(); }
 }
 
@@ -1571,8 +1628,8 @@ function _periodLabel(){
   if(_period==='semanal') return `Semana ${last.slice(8,10)} ${moN} ${yr}`;
   const prevMo = mo===1?12:mo-1, prevYr = mo===1?yr-1:yr;
   const prevMo2 = prevMo===1?12:prevMo-1, prevYr2 = prevMo===1?prevYr-1:prevYr;
-  if(_period==='mom' || _period==='mensual') return `MoM · ${_MES[prevMo-1]} ${prevYr} vs ${_MES[prevMo2-1]} ${prevYr2}`;
-  if(_period==='mmaa') return `MMAA · ${_MES[prevMo-1]} ${prevYr} vs ${_MES[prevMo-1]} ${prevYr-1}`;
+  if(_period==='mom' || _period==='mensual') return `MoM · ${_MES[mo-1]} ${yr} vs ${_MES[prevMo-1]} ${prevYr}`;
+  if(_period==='mmaa') return `MMAA · ${_MES[mo-1]} ${yr} vs ${_MES[mo-1]} ${yr-1}`;
   if(_period==='mtd')  return `MTD · ${moN} ${yr} (mismos días) vs ${_MES[prevMo-1]} ${prevYr}`;
   return '';
 }
@@ -1596,12 +1653,10 @@ function _periodIdxs(){
   const idxOf = (y, m) => weeks.map((w,i)=>{const[Y,M]=w.split('-').map(Number);return(Y===y&&M===m)?i:-1;}).filter(i=>i>=0);
   
   if(_period==='mom' || _period==='mensual'){
-    // MoM: mes anterior vs mes -2 (ej. abr26 vs mar26)
-    return {lw: idxOf(prevYr, prevMo), pw: idxOf(prevYr2, prevMo2)};
+    return {lw: idxOf(yr, mo), pw: idxOf(prevYr, prevMo)};
   }
   if(_period==='mmaa'){
-    // MMAA: mes anterior vs mismo mes año anterior (ej. abr26 vs abr25)
-    return {lw: idxOf(prevYr, prevMo), pw: idxOf(yrLY, sameMoLY)};
+    return {lw: idxOf(yr, mo), pw: idxOf(yr-1, mo)};
   }
   // MTD: mes actual (parcial) vs mismos días del mes anterior
   const mtdIdx = idxOf(yr, mo);
@@ -2921,8 +2976,15 @@ function _getMonthlyMap(){
   return map;
 }
 function _monthlyAggBrand(brand){
+  const _empty={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+  if(DATA.m_brand&&DATA.m_brand[brand]&&DATA.m_months&&DATA.m_months.length){
+    const bm=DATA.m_brand[brand];
+    const r={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+    for(const fecha of DATA.m_months){const[y,m]=fecha.split('-').map(Number);const d=bm.months[fecha]||{};r.labels.push(`${_MES[m-1]} ${y}`);r.ventas.push(d.ventas||0);r.ordenes.push(d.ordenes||0);r.trafico.push(d.trafico_ss||0);r.cvr.push(d.cvr_pct||0);r.bookings.push(d.bookings_ads||0);r.revenue.push(d.revenue_ads||0);r.mkd_ally.push(d.pct_markdown_ally||0);r.mkd_pro.push(d.pct_markdown_pro_ally||0);r.pct_cancel.push(d.pct_cancelaciones||0);r.pct_defecto.push(0);}
+    return r;
+  }
   const bd=DATA.brand_data[brand];
-  if(!bd)return{labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+  if(!bd)return _empty;
   const map=_getMonthlyMap();
   const keys=Object.keys(map).sort();
   const r={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
@@ -2950,6 +3012,14 @@ function _monthlyAggBrand(brand){
   return r;
 }
 function _monthlyAggKam(lider,kam){
+  if(DATA.m_brand&&DATA.m_months&&DATA.m_months.length){
+    const brands=Object.entries(DATA.m_brand).filter(([,m])=>m.lider===lider&&m.kam===kam).map(([b])=>b);
+    if(brands.length>0){
+      const r={labels:[],ventas:[],ordenes:[],trafico:[],cvr:[],bookings:[],revenue:[],mkd_ally:[],mkd_pro:[],pct_cancel:[],pct_defecto:[]};
+      for(const fecha of DATA.m_months){const[y,mo]=fecha.split('-').map(Number);r.labels.push(`${_MES[mo-1]} ${y}`);let sv=0,so=0,st=0,sb=0,sr=0,wv=0,wc=0,wma=0,wmp=0;brands.forEach(b=>{const d=(DATA.m_brand[b].months[fecha])||{};const v=d.ventas||0;sv+=v;so+=d.ordenes||0;st+=d.trafico_ss||0;sb+=d.bookings_ads||0;sr+=d.revenue_ads||0;wv+=v;wc+=(d.pct_cancelaciones||0)*v;wma+=(d.pct_markdown_ally||0)*v;wmp+=(d.pct_markdown_pro_ally||0)*v;});r.ventas.push(sv);r.ordenes.push(so);r.trafico.push(st);r.bookings.push(sb);r.revenue.push(sr);r.cvr.push(st>0?so/st*100:0);r.pct_cancel.push(wv>0?wc/wv:0);r.mkd_ally.push(wv>0?wma/wv:0);r.mkd_pro.push(wv>0?wmp/wv:0);r.pct_defecto.push(0);}
+      return r;
+    }
+  }
   const brands=(DATA.callout_brands||[]).filter(b=>b.lider===lider&&b.kam===kam).map(b=>b.marca);
   const map=_getMonthlyMap();
   const keys=Object.keys(map).sort();
@@ -2991,11 +3061,15 @@ function _getMensualIdxsFixed(prev){
   return weeks.map((w,i)=>{const[y,m]=w.split('-').map(Number);return(y===prevYr-1&&m===prevMo)?i:-1;}).filter(i=>i>=0);
 }
 function _getMensualLabel(){
+  if(DATA.m_months&&DATA.m_months.length>=2){
+    const last=DATA.m_months[DATA.m_months.length-1];
+    const [y,m]=last.split('-').map(Number);
+    return _MES[m-1]+' '+y+' vs '+_MES[m-1]+' '+(y-1);
+  }
   const weeks=DATA.all_weeks,n=weeks.length;
   const last=weeks[n-1];
   const [yr,mo]=last.split('-').map(Number);
-  const prevMo=mo===1?12:mo-1,prevYr=mo===1?yr-1:yr;
-  return _MES[prevMo-1]+' '+prevYr+' vs '+_MES[prevMo-1]+' '+(prevYr-1);
+  return _MES[mo-1]+' '+yr+' vs '+_MES[mo-1]+' '+(yr-1);
 }
 function initAlertasMes(){
   const liderSel=document.getElementById('almesFiltLider');
@@ -3910,14 +3984,17 @@ function fbK(s){ return String(s).replace(/[.#$[\]\/ ]/g,'_'); }
 
 async function fbLoad(){
   try{
-    const [r1,r2,r3] = await Promise.all([
-      fetch(FB+'/ads_forecast.json').then(r=>r.json()),
-      fetch(FB+'/caidas.json').then(r=>r.json()),
-      fetch(FB+'/kam_reports.json').then(r=>r.json())
+    const safe = r => (r && typeof r === 'object' && !r.error) ? r : {};
+    const [r1,r2,r3,r4] = await Promise.all([
+      fetch(FB+'/ads_forecast.json').then(r=>r.json()).catch(()=>null),
+      fetch(FB+'/caidas.json').then(r=>r.json()).catch(()=>null),
+      fetch(FB+'/kam_reports.json').then(r=>r.json()).catch(()=>null),
+      fetch(FB+'/zooms_mensual.json').then(r=>r.json()).catch(()=>null)
     ]);
-    _fb.ads_forecast = r1||{};
-    _fb.caidas       = r2||{};
-    _fb.kam_reports  = r3||{};
+    _fb.ads_forecast  = safe(r1);
+    _fb.caidas        = safe(r2);
+    _fb.kam_reports   = safe(r3);
+    _fb.zooms_mensual = safe(r4);
   }catch(e){ console.warn('Firebase load error',e); }
 }
 
@@ -3979,6 +4056,106 @@ function _populateCaidasKams(){
 function onCaidasLiderChange(){
   _populateCaidasKams();
   renderCaidasTable();
+}
+
+// ── ZOOMS MENSUALES ───────────────────────────────────────────────────────────
+function _zmPopulateKams(){
+  const liderF=document.getElementById('zmLiderSel')?.value||'';
+  const kamSel=document.getElementById('zmKamSel');
+  if(!kamSel)return;
+  const cur=kamSel.value;
+  const mb=DATA.m_brand||{};
+  const kamMap={};
+  Object.values(mb).forEach(m=>{if(liderF&&m.lider!==liderF)return;kamMap[m.kam_email]=m.kam;});
+  const pairs=Object.entries(kamMap).map(([e,n])=>({val:e,label:n})).sort((a,b)=>a.label.localeCompare(b.label));
+  const seen=new Set();const uniq=pairs.filter(p=>{if(seen.has(p.val))return false;seen.add(p.val);return true;});
+  kamSel.innerHTML='<option value="">Todos los KAMs</option>';
+  uniq.forEach(p=>{const o=document.createElement('option');o.value=p.val;o.textContent=p.label;if(p.val===cur)o.selected=true;kamSel.appendChild(o);});
+  if(cur&&!uniq.find(p=>p.val===cur))kamSel.value='';
+}
+function zmOnLiderChange(){_zmPopulateKams();renderZoomsMensuales();}
+async function initZoomsMensuales(){
+  const lSel=document.getElementById('zmLiderSel');
+  if(lSel&&lSel.getAttribute('data-loaded')!=='1'){
+    const mb=DATA.m_brand||{};
+    const liders=[...new Set(Object.values(mb).map(m=>m.lider))].sort();
+    liders.forEach(l=>{const o=document.createElement('option');o.value=l;o.textContent=(typeof LS!=='undefined'&&LS[l])||l.split('@')[0];lSel.appendChild(o);});
+    lSel.setAttribute('data-loaded','1');
+  }
+  _zmPopulateKams();
+  fbSyncIndicator('zmSyncStatus','Conectando...','#F59E0B');
+  try{await fbLoad();fbSyncIndicator('zmSyncStatus','Sincronizado','#059669');}
+  catch(e){fbSyncIndicator('zmSyncStatus','Sin Firebase','#F59E0B');}
+  renderZoomsMensuales();
+}
+async function syncZoomsMensuales(){
+  fbSyncIndicator('zmSyncStatus','Cargando...','#F59E0B');
+  await fbLoad();fbSyncIndicator('zmSyncStatus','Sincronizado','#059669');
+  renderZoomsMensuales();
+}
+function renderZoomsMensuales(){
+  const wrap=document.getElementById('zmTableWrap');
+  const label=document.getElementById('zmWeekLabel');
+  const kamF=document.getElementById('zmKamSel')?.value||'';
+  const liderF=document.getElementById('zmLiderSel')?.value||'';
+  const mb=DATA.m_brand||{};
+  const mm=DATA.m_months||[];
+  const fmtM=f=>{if(!f)return'?';const[y,m]=f.split('-').map(Number);return(_MES&&_MES[m-1]||'?')+' '+y;};
+  if(!wrap)return;
+  if(!mm.length){wrap.innerHTML='<div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:10px;padding:16px 20px;font-size:13px;color:#92400E"><strong>Tab data Mensual no disponible</strong><br><br>Publica ese tab en Google Sheets como CSV, luego recarga.</div>';return;}
+  const today=new Date();
+  const curMonStr=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0');
+  const closed=mm.filter(m=>m.slice(0,7)<curMonStr);
+  if(closed.length<2){wrap.innerHTML='<p style="color:#6B7280;font-size:13px;padding:16px">No hay suficientes meses cerrados.</p>';return;}
+  const lastM=closed[closed.length-1],prevM=closed[closed.length-2];
+  if(label)label.textContent='LM: '+fmtM(lastM)+' vs PM: '+fmtM(prevM);
+  const filtered=Object.entries(mb).filter(([,meta])=>{
+    if(liderF&&meta.lider!==liderF)return false;
+    if(kamF&&meta.kam_email!==kamF)return false;
+    return true;
+  });
+  const rows=filtered.map(([brand,meta])=>{
+    const lm=meta.months[lastM]||{},pm=meta.months[prevM]||{};
+    const gmv_lm=lm.ventas||0,gmv_pm=pm.ventas||0;
+    const nom_loss=gmv_pm-gmv_lm;
+    const delta_pct=gmv_pm>0?(gmv_lm-gmv_pm)/gmv_pm*100:null;
+    let streak=0;
+    for(let i=closed.length-1;i>0;i--){const v=meta.months[closed[i]]?.ventas||0,vp=meta.months[closed[i-1]]?.ventas||0;if(v<vp&&vp>0)streak++;else break;}
+    return{brand,lider:meta.lider,kam:meta.kam,kam_email:meta.kam_email,gmv_lm,gmv_pm,ord_lm:lm.ordenes||0,ord_pm:pm.ordenes||0,nom_loss,delta_pct,streak};
+  }).filter(r=>r.nom_loss>0&&r.gmv_pm>0).sort((a,b)=>b.nom_loss-a.nom_loss);
+  if(!rows.length){wrap.innerHTML='<p style="color:#6B7280;font-size:13px;padding:16px">Sin caidas MoM en '+fmtM(lastM)+'.</p>';return;}
+  const fmt$=v=>'$'+(v>=1000?(v/1000).toFixed(1)+'K':Math.round(v).toLocaleString());
+  const fmtPct=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
+  const strk=s=>s>=3?'🔥🔥🔥 '+s+'o mes':s===2?'🔥🔥 2o mes':s===1?'🔥 1er mes':'';
+  const totalLoss=rows.reduce((s,r)=>s+r.nom_loss,0);
+  const fbData=kamF?fbR('zooms_mensual',lastM,kamF):{};
+  let html='<div style="display:flex;gap:10px;margin-bottom:12px"><div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:10px 16px;font-size:12px"><span style="color:#6B7280">Perdida total:</span><strong style="color:#DC2626;margin-left:6px">-'+fmt$(totalLoss)+'</strong></div><div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:10px 16px;font-size:12px;color:#059669">Explicaciones via Firebase</div></div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#1F2937;color:#fff"><th style="padding:8px 12px;text-align:left">MARCA</th><th style="padding:8px;text-align:right">GMV LM</th><th style="padding:8px;text-align:right">GMV PM</th><th style="padding:8px;text-align:right">Delta $</th><th style="padding:8px;text-align:right">Delta %</th><th style="padding:8px;text-align:right">Ord LM</th><th style="padding:8px;text-align:right">Ord PM</th><th style="padding:8px;min-width:150px">Por que cayo?</th><th style="padding:8px;min-width:150px">Plan</th><th style="padding:8px">Guardar</th></tr></thead><tbody>';
+  rows.forEach((r,i)=>{
+    const bg=i%2===0?'#FAFAFA':'#fff';
+    const pct=r.delta_pct!==null?fmtPct(r.delta_pct):'--';
+    const pctC=r.delta_pct!==null&&r.delta_pct<0?'#DC2626':'#374151';
+    const sb=strk(r.streak);
+    const lName=(typeof LS!=='undefined'&&LS[r.lider])||r.lider.split('@')[0];
+    const saved=fbData[fbK(r.brand)]||{};
+    const mEsc=r.brand.replace(/'/g,"\'").replace(/"/g,'&quot;');
+    html+='<tr style="background:'+bg+';border-bottom:1px solid #F3F4F6"><td style="padding:10px 12px"><div style="font-weight:700;font-size:12px">'+r.brand+'</div><div style="font-size:10px;color:#6B7280">'+lName+' · '+r.kam+'</div>'+(sb?'<div style="font-size:10px;color:#DC2626">'+sb+'</div>':'')+'</td><td style="padding:8px;text-align:right;font-weight:600">'+fmt$(r.gmv_lm)+'</td><td style="padding:8px;text-align:right;color:#6B7280">'+fmt$(r.gmv_pm)+'</td><td style="padding:8px;text-align:right;color:#DC2626;font-weight:700">-'+fmt$(r.nom_loss)+'</td><td style="padding:8px;text-align:right;color:'+pctC+';font-weight:600">'+pct+'</td><td style="padding:8px;text-align:right">'+r.ord_lm.toLocaleString()+'</td><td style="padding:8px;text-align:right;color:#6B7280">'+r.ord_pm.toLocaleString()+'</td><td style="padding:8px"><textarea id="zm_c_'+i+'" style="width:100%;padding:4px;font-size:11px;border:1px solid #D1D5DB;border-radius:4px;resize:vertical;min-height:44px;box-sizing:border-box" placeholder="Por que cayo?">'+(saved.comment||'')+'</textarea></td><td style="padding:8px"><textarea id="zm_p_'+i+'" style="width:100%;padding:4px;font-size:11px;border:1px solid #D1D5DB;border-radius:4px;resize:vertical;min-height:44px;box-sizing:border-box" placeholder="Plan...">'+(saved.plan||'')+'</textarea></td><td style="padding:8px;text-align:center"><button id="zm_b_'+i+'" onclick="saveZoomMensual(''+kamF+'',''+mEsc+'',''+lastM+'','+i+')" style="background:#3B82F6;color:#fff;border:none;border-radius:5px;padding:5px 10px;font-size:11px;cursor:pointer">Guardar</button>'+(saved.ts?'<div style="font-size:10px;color:#059669;margin-top:2px">'+saved.ts+'</div>':'')+'</td></tr>';
+  });
+  html+='</tbody></table></div><p style="font-size:10px;color:#9CA3AF;margin-top:6px">Solo meses cerrados. Ordenado por perdida MoM.</p>';
+  wrap.innerHTML=html;
+}
+async function saveZoomMensual(kam,marca,month,idx){
+  const comment=document.getElementById('zm_c_'+idx)?.value||'';
+  const plan=document.getElementById('zm_p_'+idx)?.value||'';
+  const ts=new Date().toLocaleString('es-MX',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  const btn=document.getElementById('zm_b_'+idx);
+  if(btn){btn.textContent='...';btn.disabled=true;btn.style.background='#9CA3AF';}
+  try{
+    await fbW('zooms_mensual',[month,kam,marca],{comment,plan,ts});
+    if(btn){btn.textContent='OK';btn.style.background='#059669';setTimeout(()=>{btn.textContent='Guardar';btn.disabled=false;btn.style.background='#3B82F6';},2000);}
+  }catch(e){
+    if(btn){btn.textContent='Error';btn.style.background='#DC2626';setTimeout(()=>{btn.textContent='Guardar';btn.disabled=false;btn.style.background='#3B82F6';},2500);}
+  }
 }
 
 // ── CAÍDAS KAM ────────────────────────────────────────────────────────────────
@@ -6013,4 +6190,4 @@ function toggleYoYLider(lider){
 
 </script>
 
-</body></html>
+</body></html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  

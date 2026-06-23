@@ -891,7 +891,9 @@ function _parseCSV(text) {
   return rows;
 }
 
-async function _buildDataFromSheet() {
+  function numF(s){ return +(String(s||'').replace(/,/g,'')) || 0; }
+
+  async function _buildDataFromSheet() {
   const url = `https://docs.google.com/spreadsheets/d/${_SHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(_SHEET_TAB)}&t=${Date.now()}`;
   let text;
   try { const res = await fetch(url); text = await res.text(); }
@@ -972,15 +974,15 @@ async function _buildDataFromSheet() {
       };
     }
     const bd = brand_data[brand];
-    bd.ventas[bi]                = +r.VENTAS               || 0;
-    bd.ordenes[bi]               = +r.ORDENES              || 0;
+    bd.ventas[bi]                = numF(r.VENTAS);
+    bd.ordenes[bi]               = numF(r.ORDENES);
     bd.aov[bi]                   = +r.AOV                  || 0;
     bd.trafico_ss[bi]            = +r.TRAFICO_SS            || 0;
     bd.cvr_pct[bi]               = +r.CVR_PCT               || 0;
     bd.bookings_ads[bi]          = +r.BOOKINGS_ADS          || 0;
     bd.revenue_ads[bi]           = +r.REVENUE_ADS           || 0;
     bd.pct_markdown_ally[bi]     = +r.PCT_MARKDOWN_ALLY     || 0;
-    bd.pct_markdown_pro_ally[bi] = +r.PCT_MARKDOWN_PRO_ALLY || 0;
+    bd.pct_markdown_pro_ally[bi] = numF(r.PCT_MARKDOWN_PRO_ALLY);
     bd.pct_cancelaciones[bi]     = +r.PCT_CANCELACIONES     || 0;
     bd.pct_defectos[bi]          = +r.PCT_DEFECTOS          || 0;
   });
@@ -1018,7 +1020,7 @@ async function _buildDataFromSheet() {
 
   // weekly_global
   const wg_v = new Array(N).fill(0), wg_o = new Array(N).fill(0);
-  rows.forEach(r => { const wi = wIdx[r.WEEK_DATE]; if(wi===undefined) return; wg_v[wi]+=+r.VENTAS||0; wg_o[wi]+=+r.ORDENES||0; });
+  rows.forEach(r => { const wi = wIdx[r.WEEK_DATE]; if(wi===undefined) return; wg_v[wi]+=numF(r.VENTAS); wg_o[wi]+=numF(r.ORDENES); });
   const weekly_global = { ventas: wg_v, ordenes: wg_o };
 
   // leaders & lider_weekly
@@ -1034,16 +1036,16 @@ async function _buildDataFromSheet() {
   rows.forEach(r => {
     const l=(r.LIDER||'').toLowerCase(), wi=wIdx[r.WEEK_DATE];
     if(wi===undefined||!_lw[l]) return;
-    const d=_lw[l], v=+r.VENTAS||0, o=+r.ORDENES||0;
+    const d=_lw[l], v=numF(r.VENTAS), o=numF(r.ORDENES);
     d.ventas[wi]+=v; d.ordenes[wi]+=o;
-    d.trafico[wi]+=+r.TRAFICO_SS||0;
-    d.bookings[wi]+=+r.BOOKINGS_ADS||0;
-    d.revenue[wi]+=+r.REVENUE_ADS||0;
+    d.trafico[wi]+=numF(r.TRAFICO_SS);
+    d.bookings[wi]+=numF(r.BOOKINGS_ADS);
+    d.revenue[wi]+=numF(r.REVENUE_ADS);
     d._wv[wi]+=v;
-    d._wc_ord[wi]+=(+r.PCT_CANCELACIONES||0)*o/100;
+    d._wc_ord[wi]+=(numF(r.PCT_CANCELACIONES))*o/100;
     d._wd_ord[wi]+=(+r.PCT_DEFECTOS||0)*o/100;
-    d._wma[wi]+=(+r.PCT_MARKDOWN_ALLY||0)*v/100;
-    d._wmp[wi]+=(+r.PCT_MARKDOWN_PRO_ALLY||0)*v/100;
+    d._wma[wi]+=(numF(r.PCT_MARKDOWN_ALLY))*v/100;
+    d._wmp[wi]+=(numF(r.PCT_MARKDOWN_PRO_ALLY))*v/100;
   });
   const lider_weekly = {};
   leaders.forEach(l => {
@@ -1090,16 +1092,16 @@ async function _buildDataFromSheet() {
       _wv:new Array(N).fill(0), _wc_ord:new Array(N).fill(0), _wd_ord:new Array(N).fill(0),
       _wma:new Array(N).fill(0), _wmp:new Array(N).fill(0)
     };
-    const kd=kam_trends[l][k], v=+r.VENTAS||0, o=+r.ORDENES||0;
+    const kd=kam_trends[l][k], v=numF(r.VENTAS), o=numF(r.ORDENES);
     kd.ventas[wi]+=v; kd.ordenes[wi]+=o;
-    kd.trafico[wi]+=+r.TRAFICO_SS||0;
-    kd.bookings[wi]+=+r.BOOKINGS_ADS||0;
-    kd.revenue[wi]+=+r.REVENUE_ADS||0;
+    kd.trafico[wi]+=numF(r.TRAFICO_SS);
+    kd.bookings[wi]+=numF(r.BOOKINGS_ADS);
+    kd.revenue[wi]+=numF(r.REVENUE_ADS);
     kd._wv[wi]+=v;
-    kd._wc_ord[wi]+=(+r.PCT_CANCELACIONES||0)*o/100;
+    kd._wc_ord[wi]+=(numF(r.PCT_CANCELACIONES))*o/100;
     kd._wd_ord[wi]+=(+r.PCT_DEFECTOS||0)*o/100;
-    kd._wma[wi]+=(+r.PCT_MARKDOWN_ALLY||0)*v/100;
-    kd._wmp[wi]+=(+r.PCT_MARKDOWN_PRO_ALLY||0)*v/100;
+    kd._wma[wi]+=(numF(r.PCT_MARKDOWN_ALLY))*v/100;
+    kd._wmp[wi]+=(numF(r.PCT_MARKDOWN_PRO_ALLY))*v/100;
   });
   // Compute derived KAM metrics
   Object.values(kam_trends).forEach(lt => {
@@ -1281,7 +1283,7 @@ async function _buildDataFromSheet() {
       const mLines = mRaw.split('\n');
       mLines.shift();
       mLines.unshift(',FECHA,LIDER,KAM,BRAND_ID,MARCA,VENTAS,BOOKINGS_ADS,REVENUE_ADS,ORDENES,TRAFICO_SS,CANCELS,MARKDOWN,MKD_PRO,AOV,CVR_PCT,PCT_CANCELACIONES,PCT_MARKDOWN_ALLY,PCT_MARKDOWN_PRO_ALLY');
-      const mRows = _parseCSV(mLines.join('\n')).filter(r => r.FECHA && r.MARCA && +r.VENTAS >= 0);
+      const mRows = _parseCSV(mLines.join('\n')).filter(r => r.FECHA && r.MARCA && numF(r.VENTAS) >= 0);
       const mmSet = new Set();
       const _tnow = new Date();
       const _curMonStr = `${_tnow.getFullYear()}-${String(_tnow.getMonth()+1).padStart(2,'0')}`;
@@ -1298,12 +1300,12 @@ async function _buildDataFromSheet() {
           };
         }
         m_brand[brand].months[fecha] = {
-          ventas:+r.VENTAS||0, ordenes:+r.ORDENES||0, trafico_ss:+r.TRAFICO_SS||0,
-          bookings_ads:+r.BOOKINGS_ADS||0, revenue_ads:+r.REVENUE_ADS||0,
-          aov:+r.AOV||0, cvr_pct:+r.CVR_PCT||0,
-          pct_cancelaciones:+r.PCT_CANCELACIONES||0,
-          pct_markdown_ally:+r.PCT_MARKDOWN_ALLY||0,
-          pct_markdown_pro_ally:+r.PCT_MARKDOWN_PRO_ALLY||0,
+          ventas:numF(r.VENTAS), ordenes:numF(r.ORDENES), trafico_ss:numF(r.TRAFICO_SS),
+          bookings_ads:numF(r.BOOKINGS_ADS), revenue_ads:numF(r.REVENUE_ADS),
+          aov:numF(r.AOV), cvr_pct:numF(r.CVR_PCT),
+          pct_cancelaciones:numF(r.PCT_CANCELACIONES),
+          pct_markdown_ally:numF(r.PCT_MARKDOWN_ALLY),
+          pct_markdown_pro_ally:numF(r.PCT_MARKDOWN_PRO_ALLY),
         };
       });
       m_months = [...mmSet].sort();
@@ -5693,7 +5695,7 @@ async function renderSWAT(){
       bd[b][r.ORDER_DATE] = {
         gmv:+r.GMV||0, orders:+r.ORDERS||0, sst:+r.SST||0,
         cancel_rate:+r.CANCEL_RATE_PCT||0, mkd:+r.MARKDOWN||0, mkdp:+r.MKD_PRO||0,
-        aov:+r.AOV||0
+        aov:numF(r.AOV)
       };
     });
 
